@@ -1,0 +1,69 @@
+writeup v0
+Dedicated to the public domain under CC0: https://creativecommons.org/publicdomain/zero/1.0/
+
+
+# Introduction
+
+Writeup is a text markup format that translates to HTML5. It is similar to Markdown in spirit, but aims to be simpler and unambiguous.
+
+## License
+All of the source code and documentation is dedicated to the public domain under Creative Commons 0: https://creativecommons.org/publicdomain/zero/1.0/
+
+
+# Format
+
+Writeup documents consist of:
+• an initial required version line.
+• optional consecutive copyright/license lines at the beginning of the document, followed by a blank line. Recognized prefixes:
+  • ©
+  • Copyright
+  • Dedicated to the public domain
+• blank lines, containing only whitespace characters.
+• hash lines, beginning with one or more hash ('#') characters.
+• bullet lines, beginning with zero or more pairs of spaces, followed by a bullet ('•') character (opt-8 on OSX English keyboards).
+• indented lines, indented by two or more spaces.
+• text lines, which are any lines that don't match the above criteria.
+
+These are translated as follows:
+• a single blank separates paragraphs (<p>).
+• otherwise blank lines are ignored.
+• a hash line denotes a section with a header whose numerical level is indicated by the number of hash symbols.
+  • sections are translated into nested <section> tags, containing the appropriate <h1> through <h6> tags.
+  • sections deeper than depth 6 have their header number clamped to 6, in order to produce conformant HTML.
+
+## Warnings
+Warnings are issued for the following conditions:
+• a blank line is not empty.
+• the final line does not end with a newline character.
+• indentation is an odd number of spaces.
+• indentation consisting of characters other than spaces.
+
+
+# Versioning
+
+All writeup documents require a version line at the beginning of the document, like this:
+  writeup v0
+
+Writeup is currently experimental, and the only version number supported is 0. Once the format appears reasonably stable, then it will be promoted to v1. From then on, if the format changes, then implementations should either recognize and respect or else reject old version numbers.
+
+Text snippets submitted to a program can omit the version number; it is the responsibility of the program to track the format version as necessary.
+
+
+# Usage
+
+Writeup can take 0, 1 or 2 arguments, defaulting to stdout and stdin as follows:
+  $ writeup.py <in >out
+  $ writeup.py file.wu > out
+  $ writeup.py file.wu file.html
+
+
+# Implementation:
+
+Writeup is currently implemented as a python 3.4 script.
+
+
+# Credits
+
+Writeup was created by George King.
+
+Shout out to the RZA, the GZA, Method Man, Raekwon, Ghostface Killah, Inspectah Deck, U-God, Masta Killa, Cappadonna, and the Ol' Dirty Bastard.
