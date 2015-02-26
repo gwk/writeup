@@ -39,14 +39,14 @@ matchers = [
   (s_indent, re.compile(r'  (.*)\n'))]
 
 
-def writeup(f_in, f_out, line_offset):
+def writeup(in_lines, out_file, line_offset):
   'generate html from a writeup file (or stream of lines).'
 
   def out(depth, *items):
-    print(' ' * (depth * 2), *items, sep='', end='', file=f_out)
+    print(' ' * (depth * 2), *items, sep='', end='', file=out_file)
 
   def outL(depth, *items):
-    print(' ' * (depth * 2), *items, sep='', file=f_out)
+    print(' ' * (depth * 2), *items, sep='', file=out_file)
 
   outL(0, '''\
 <html>
@@ -209,7 +209,7 @@ def writeup(f_in, f_out, line_offset):
 
 
   prev_state = s_begin
-  for line_num, line in enumerate(f_in):
+  for line_num, line in enumerate(in_lines):
     # any license notice at top gets moved to a footer at the bottom of the html.
     if prev_state == s_begin and license_re.fullmatch(line):
       license_lines.append(line.strip())
