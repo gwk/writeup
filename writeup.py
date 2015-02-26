@@ -21,8 +21,16 @@ def check(cond, fmt, *items):
     fail(fmt, *items)
 
 
+# version pattern is applied to the first line of documents;
+# programs processing input strings may or may not check for a version as appropriate.
+version_pattern = r'writeup v(\d+)\n'
+version_re = re.compile(version_pattern)
+
+# license pattern is is only applied to the first line (following the version line, if any).
+license_re = re.compile(r'(©|Copyright|Dedicated to the public domain).*\n')
+
 # line states.
-s_begin, s_license, s_blank, s_hash, s_bullet, s_indent, s_text = range(7)
+s_begin, s_license, s_blank, s_hash, s_bullet, s_indent, s_text, s_end = range(8)
 
 matchers = [
   (s_blank, re.compile(r'(\s*)\n')),
@@ -30,7 +38,9 @@ matchers = [
   (s_bullet, re.compile(r'(\s*)•(\s*)(.*)\n')),
   (s_indent, re.compile(r'  (.*)\n'))]
 
-def gen(f_in, f_out, line_offset):
+
+def writeup(f_in, f_out, line_offset):
+  'generate html from a writeup file (or stream of lines).'
 
   def out(depth, *items):
     print(' ' * (depth * 2), *items, sep='', end='', file=f_out)
@@ -79,17 +89,20 @@ def gen(f_in, f_out, line_offset):
 <body>
 ''')
 
-  prev = s_begin
-  state = s_begin
+  # state variables used by writeup_line.
   section_depth = 0
   list_depth = 0
   license_lines = []
 
-  for line_num, line in enumerate(f_in):
+  def writeup_line(line_num, line, prev_state, state, groups):
+    'process a line.'
+    nonlocal section_depth
+    nonlocal list_depth
+    nonlocal license_lines
 
     def warn(fmt, *items):
       errFL('warning: line {}: ' + fmt, line_offset + line_num + 1, *items)
-      errF('  {}', line)
+      errFL("  '{}'", repr(line))
 
     def check_whitespace(len_exp, string, msg_suffix=''):
       for i, c in enumerate(string):
@@ -106,56 +119,35 @@ def gen(f_in, f_out, line_offset):
     def esc(text):
       return html.escape(text, quote=False)
 
-    # handle leading and trailing space.
-    if not line.endswith('\n'):
-      warn("does not end with '\\n'")
-
-    # any license notice at top gets moved to a footer at the bottom of the html.
-    if state == s_begin and re.fullmatch(r'(©|Copyright|Dedicated to the public domain).*\n', line):
-      state = s_license
-    if state == s_license:
-      l = line.strip()
-      if l:
-        license_lines.append(l)
-        continue
-
-    # determine state.
-    state = s_text
-    groups = None
-    for s, r in matchers:
-      m = r.fullmatch(line)
-      if m:
-        state = s
-        groups = m.groups()
-        break
-
     # transition.
-    if prev == s_begin:
+    if prev_state == s_begin:
       pass
-    elif prev == s_blank:
+    if prev_state == s_license:
       pass
-    elif prev == s_hash:
+    elif prev_state == s_blank:
       pass
-    elif prev == s_bullet:
+    elif prev_state == s_hash:
+      pass
+    elif prev_state == s_bullet:
       if state != s_bullet:
         for i in range(list_depth, 0, -1):
           outL(section_depth + (i - 1), '</ul>')
         list_depth = 0
-    elif prev == s_indent:
+    elif prev_state == s_indent:
       if state != s_indent:
         outL(0, '</pre>')
-    elif prev == s_text:
+    elif prev_state == s_text:
       if state != s_text:
         outL(section_depth, '</p>')
     else:
-      fail('bad prev state: {}', prev)
+      fail('bad prev_state: {}', prev_state)
 
     # output text.
 
     if state == s_blank:
       spaces, = groups
       if len(spaces):
-        warn("blank line is not empty")
+        warn("blank line is not empty: spaces: '{}'", repr(spaces))
 
     elif state == s_hash:
       hashes, spaces, text = groups
@@ -165,7 +157,7 @@ def gen(f_in, f_out, line_offset):
       if section_depth < depth: # deepen.
         for i in range(section_depth, depth):
           outL(i, '<section class="s{}">'.format(i + 1))
-      elif section_depth > depth: # surface; close sections and open new peer.
+      elif section_depth > depth: # surface; close prev child sections and open new peer.
         for i in range(section_depth, depth - 1, -1):
           outL(i - 1, '</section>')
         outL(depth - 1, '<section class="s{}">'.format(depth))
@@ -184,7 +176,7 @@ def gen(f_in, f_out, line_offset):
       depth = l // 2 + 1
       check_whitespace(1, spaces, ' following bullet')
       for i in range(list_depth, depth, -1):
-        outL(section_depth + i, '</ul>')
+        outL(section_depth + (i - 1), '</ul>')
       for i in range(list_depth, depth):
         outL(section_depth + i, '<ul class="l{}">'.format(i + 1))
       outL(section_depth + depth, '<li>{}</li>'.format(esc(text)))
@@ -192,28 +184,58 @@ def gen(f_in, f_out, line_offset):
 
     elif state == s_indent:
       text, = groups
-      if prev != s_indent:
+      if prev_state != s_indent:
         out(section_depth, '<pre>')
       out(0, '\n', esc(text))
 
     elif state == s_text:
       # TODO: check for strange characters that html will ignore.
+      if not line.endswith('\n'):
+        warn("missing newline ('\\n')")
       text = line.strip()
-      if prev != s_text:
+      if prev_state != s_text:
         outL(section_depth, '<p>')
-      outL(section_depth, esc(text))
+      outL(section_depth + 1, esc(text))
+
+    elif state == s_end:
+      for i in range(section_depth, 0, -1):
+        outL(i - 1, '</section>')
+      if license_lines:
+        outL(0, '<footer>\n', '<br />'.join(license_lines), '\n</footer>')
+      outL(0, '</body>\n</html>')
 
     else:
       fail('bad state: {}', state)
 
-    prev = state
+
+  prev_state = s_begin
+  for line_num, line in enumerate(f_in):
+    # any license notice at top gets moved to a footer at the bottom of the html.
+    if prev_state == s_begin and license_re.fullmatch(line):
+      license_lines.append(line.strip())
+      prev_state = s_license
+      continue
+    if prev_state == s_license: # consume remaining license lines.
+      l = line.strip()
+      if l: # not empty.
+        license_lines.append(l)
+        continue # remain in s_license.
+
+    # license has ended; determine state.
+    state = s_text # default if no patterns match.
+    groups = None
+    for s, r in matchers:
+      m = r.fullmatch(line)
+      if m:
+        state = s
+        groups = m.groups()
+        break
+
+    writeup_line(line_num, line, prev_state, state, groups)
+    prev_state = state
 
   # finish.
-  for i in range(section_depth, 0, -1):
-    outL(i - 1, '</section>')
-  if license_lines:
-    outL(0, '<footer>\n', '<br />'.join(license_lines), '\n</footer>')
-  outL(0, '</body>\n</html>')
+  writeup_line(None, None, prev_state, s_end, None)
 
 
 def main():
@@ -224,14 +246,13 @@ def main():
   f_in  = sys.stdin if len_args == 0 else open(args[0])
   f_out = sys.stdout if len_args < 2 else open(args[1], 'w')
   version_line = f_in.readline()
-  version_pattern = r'writeup v(\d+)\n' 
-  m = re.fullmatch(version_pattern, version_line)
+  m = version_re.fullmatch(version_line)
   check(m, 'first line must specify writeup version matching pattern: {}\nfound: {}',
     repr(version_pattern), repr(version_line))
   v = int(m.group(1))
   check(v == 0, 'unsupported version number: {}', v)
   version = int(m.group(1))
-  gen(f_in, f_out, line_offset=1)
+  writeup(f_in, f_out, line_offset=1)
 
 
 main()
