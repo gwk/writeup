@@ -4,10 +4,13 @@ Dedicated to the public domain under CC0: https://creativecommons.org/publicdoma
 
 # Introduction
 
-Writeup is a text markup format that translates to HTML5. It is similar to Markdown in spirit, but aims to be simpler and unambiguous.
+Writeup is a text markup format that translates to HTML5. It is similar to Markdown in spirit, but is not equivalent. Some of the differences include:
+• hierarchical sections.
+• special handling of license lines at top of file.
+• format is designed to make correct implementation simple and unambiguous.
 
 ## License
-All of the source code and documentation is dedicated to the public domain under Creative Commons 0: https://creativecommons.org/publicdomain/zero/1.0/
+All of the source code and documentation is dedicated to the public domain under CC0: https://creativecommons.org/publicdomain/zero/1.0/
 
 
 # Format
@@ -15,9 +18,9 @@ All of the source code and documentation is dedicated to the public domain under
 Writeup documents consist of:
 • an initial required version line.
 • optional consecutive copyright/license lines at the beginning of the document, followed by a blank line. Recognized prefixes:
-  • ©
-  • Copyright
-  • Dedicated to the public domain
+  • '©'
+  • 'Copyright'
+  • 'Dedicated to the public domain'
 • blank lines, containing only whitespace characters.
 • hash lines, beginning with one or more hash ('#') characters.
 • bullet lines, beginning with zero or more pairs of spaces, followed by a bullet ('•') character (opt-8 on OSX English keyboards).
@@ -59,11 +62,11 @@ Writeup can take 0, 1 or 2 arguments, defaulting to stdout and stdin as follows:
 
 # Implementation:
 
-Writeup is currently implemented as a python 3.4 script.
+Writeup is currently implemented as a python 3.4 script, depending only on the standard library.
 
 
 # Credits
 
-Writeup was created by George King.
+By George King.
 
 Shout out to the RZA, the GZA, Method Man, Raekwon, Ghostface Killah, Inspectah Deck, U-God, Masta Killa, Cappadonna, and the Ol' Dirty Bastard.
