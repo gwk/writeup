@@ -185,8 +185,8 @@ def writeup(in_lines, out_file, line_offset):
     elif state == s_indent:
       text, = groups
       if prev_state != s_indent:
-        out(section_depth, '<pre>')
-      out(0, '\n', esc(text))
+        out(section_depth, '<pre>') # a final newline between content and close tag looks bad.
+      out(0, '\n', esc(text)) # but for whatever reason a newline after the open tag is ok.
 
     elif state == s_text:
       # TODO: check for strange characters that html will ignore.
