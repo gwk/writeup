@@ -1,5 +1,5 @@
 writeup v0
-Dedicated to the public domain under CC0: https://creativecommons.org/publicdomain/zero/1.0/
+Dedicated to the public domain under CC0: https://creativecommons.org/publicdomain/zero/1.0/.
 
 
 # Introduction
@@ -10,13 +10,13 @@ Writeup is a text markup format that translates to HTML5. It is similar to Markd
 • format is designed to make correct implementation simple and unambiguous.
 
 ## License
-All of the source code and documentation is dedicated to the public domain under CC0: https://creativecommons.org/publicdomain/zero/1.0/
+All of the source code and documentation is dedicated to the public domain under CC0: https://creativecommons.org/.publicdomain/zero/1.0/.
 
 
 # Format
 
 Writeup documents consist of:
-• an initial required version line.
+• an initial required version line, e.g.: `writeup v0`
 • optional consecutive copyright/license lines at the beginning of the document, followed by a blank line. Recognized prefixes:
   • '©'
   • 'Copyright'
@@ -51,6 +51,9 @@ Writeup is currently experimental, and the only version number supported is 0. O
 
 Text snippets submitted to a program can omit the version number; it is the responsibility of the program to track the format version as necessary.
 
+## Adoption
+If you start using writeup seriously please let me know and I will bump the version number to 1.
+
 
 # Usage
 
@@ -60,7 +63,7 @@ Writeup can take 0, 1 or 2 arguments, defaulting to stdout and stdin as follows:
   $ writeup.py file.wu file.html
 
 
-# Implementation:
+# Implementation
 
 Writeup is currently implemented as a python 3.4 script, depending only on the standard library.
 

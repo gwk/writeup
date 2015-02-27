@@ -1,25 +1,50 @@
 #!/usr/bin/env python3
-# Dedicated to the public domain under CC0: https://creativecommons.org/publicdomain/zero/1.0/
+# Dedicated to the public domain under CC0: https://creativecommons.org/publicdomain/zero/1.0/.
 
 import sys
 import re
 import html
 
-
-def errF(fmt, *items):
-  print(fmt.format(*items), end='', file=sys.stderr)
-
-def errFL(fmt, *items):
-  print(fmt.format(*items), file=sys.stderr)
-
-def fail(fmt, *items):
-  errFL(fmt, *items)
-  sys.exit(1)
-
-def check(cond, fmt, *items):
-  if not cond:
-    fail(fmt, *items)
-
+default_css = '''
+a { background-color: transparent; }
+a:active { outline: 0; }
+a:hover { outline: 0; }
+body { margin: 1rem; }
+body footer {
+  margin: 1rem 0 0 0;
+  font-size: .875rem;
+  color: #606060;
+}
+footer { display: block; }
+h1 { font-size: 2.0rem; margin: 1.20rem 0 0.6rem 0; }
+h2 { font-size: 1.6rem; margin: 0.96rem 0 0.5rem 0; }
+h3 { font-size: 1.4rem; margin: 0.84rem 0 0.5rem 0; }
+h4 { font-size: 1.2rem; margin: 0.72rem 0 0.5rem 0; }
+h5 { font-size: 1.1rem; margin: 0.66rem 0 0.5rem 0; }
+h6 { font-size: 1.0rem; margin: 0.60rem 0 0.5rem 0; }
+header { display: block; }
+html {
+  background: white;
+  color: black; 
+  font-family: sans-serif;
+  font-size: 1rem;
+}
+section { display: block; }
+nav { display: block; }
+p { margin: 0; }
+pre {
+  background: #EEEEEE;
+  font-family: source code pro, menlo, terminal, monospace;
+  font-size: 1rem;
+  overflow: auto;
+  padding: 0.1rem;
+}
+ul {
+  list-style-type: disc;
+  margin: 0;
+  padding: 0 1rem;
+}
+'''
 
 # version pattern is applied to the first line of documents;
 # programs processing input strings may or may not check for a version as appropriate.
@@ -39,7 +64,36 @@ matchers = [
   (s_indent, re.compile(r'  (.*)\n'))]
 
 
-def writeup(in_lines, out_file, line_offset):
+def errF(fmt, *items):
+  print(fmt.format(*items), end='', file=sys.stderr)
+
+def errFL(fmt, *items):
+  print(fmt.format(*items), file=sys.stderr)
+
+def fail(fmt, *items):
+  errFL(fmt, *items)
+  sys.exit(1)
+
+def check(cond, fmt, *items):
+  if not cond:
+    fail(fmt, *items)
+
+
+# need to preserve spaces in between multiple words followed by semicolon,
+# for cases like `margin: 0 0 0 0;`.
+# the first option of this re is captures these chunks; other splits will return None.
+# we could be more agressive but this is good enough for now.
+minify_css_re = re.compile(r'(?<=: )(.+?;)|\s+|/\*.+?\*/', flags=re.S)
+
+def minify_css(src):
+  chunks = []
+  for chunk in minify_css_re.split(src):
+    if chunk: # discard empty chunks and splits that are None (not captured).
+      chunks.append(chunk)
+  return ' '.join(chunks) # use empty string joiner for more aggressive minification.
+
+
+def writeup(in_lines, out_file, line_offset, title, description, author, css):
   'generate html from a writeup file (or stream of lines).'
 
   def out(depth, *items):
@@ -51,43 +105,14 @@ def writeup(in_lines, out_file, line_offset):
   outL(0, '''\
 <html>
 <head>
-  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/> 
-  <style text="text/css">
-    body {
-      color: black; 
-      background: white;
-      font-family: sans-serif;
-      font-size: 1em;
-    }
-    body footer {
-      margin: 1em 0 0 0;
-      font-size: .875em;
-      color: #606060;
-    }
-    h1 { font-size: 1.802032470703125em; }
-    h2 { font-size: 1.601806640625em; }
-    h3 { font-size: 1.423828125em; }
-    h4 { font-size: 1.265625em; }
-    h5 { font-size: 1.125em; }
-    h6 { font-size: 1.0em; }
-    pre {
-      background: #EEEEEE;
-      font-family: source code pro, menlo, terminal, monospace;
-      font-size: 1em;
-    }
-    ul {
-      list-style-type: disc;
-      padding: 0 1em;
-    }
-''')
-
-  # TODO: custom CSS here?
-
-  outL(0, '''\
-  </style>
+  <meta charset="utf-8">
+  <title>{}</title>
+  <meta name="description" content="{}">
+  <meta name="author" content="{}">
+  <style text="text/css">{}</style>
 </head>
-<body>
-''')
+<body>\
+'''.format(title, description, author, css))
 
   # state variables used by writeup_line.
   section_depth = 0
@@ -238,7 +263,7 @@ def writeup(in_lines, out_file, line_offset):
   writeup_line(None, None, prev_state, s_end, None)
 
 
-def main():
+if __name__ == '__main__':
   len_args = len(sys.argv) - 1
   args = sys.argv[1:]
   check(len_args <= 2, 
@@ -252,7 +277,6 @@ def main():
   v = int(m.group(1))
   check(v == 0, 'unsupported version number: {}', v)
   version = int(m.group(1))
-  writeup(f_in, f_out, line_offset=1)
-
-
-main()
+  css = minify_css(default_css)
+  writeup(f_in, f_out, line_offset=1, title=('stdin' if len_args == 0 else args[0]),
+    description='', author='', css=css)
