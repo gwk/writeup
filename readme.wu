@@ -27,10 +27,12 @@ Writeup documents consist of:
 • indented lines, indented by two or more spaces.
 • text lines, which are any lines that don't match the above criteria.
 
-These are translated as follows:
+The following translation rules are similar to Github Flavored Markdown (GFD):
+• newlines between paragraphs insert a <br> between the lines of text.
 • a single blank separates paragraphs (<p>).
 • otherwise blank lines are ignored.
 • a hash line denotes a section with a header whose numerical level is indicated by the number of hash symbols.
+  • note: Markdown does not create a section, only a header.
   • sections are translated into nested <section> tags, containing the appropriate <h1> through <h6> tags.
   • sections deeper than depth 6 have their header number clamped to 6, in order to produce conformant HTML.
 
@@ -67,6 +69,22 @@ Writeup can take 0, 1 or 2 arguments, defaulting to stdout and stdin as follows:
 
 Writeup is currently implemented as a python 3.4 script, depending only on the standard library.
 
+
+# Examples
+
+Sections and text:
+  # Header 1
+  line 1
+  ## Header 2
+  line 2
+  Line 3
+
+Becomes:
+> # Header 1
+> line 1
+> ## Header 2
+> line 2
+> Line 3
 
 # Credits
 

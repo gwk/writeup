@@ -9,6 +9,13 @@ default_css = '''
 a { background-color: transparent; }
 a:active { outline: 0; }
 a:hover { outline: 0; }
+blockquote {
+  border-left-color: #E0E0E0;
+  border-left-style: solid;
+  border-left-width: 0.25rem;
+  margin: 0;
+  padding: 0 1rem;
+}
 body { margin: 1rem; }
 body footer {
   margin: 1rem 0 0 0;
@@ -16,12 +23,12 @@ body footer {
   color: #606060;
 }
 footer { display: block; }
-h1 { font-size: 2.0rem; margin: 1.20rem 0 0.6rem 0; }
-h2 { font-size: 1.6rem; margin: 0.96rem 0 0.5rem 0; }
-h3 { font-size: 1.4rem; margin: 0.84rem 0 0.5rem 0; }
-h4 { font-size: 1.2rem; margin: 0.72rem 0 0.5rem 0; }
-h5 { font-size: 1.1rem; margin: 0.66rem 0 0.5rem 0; }
-h6 { font-size: 1.0rem; margin: 0.60rem 0 0.5rem 0; }
+h1 { font-size: 2.0rem; margin: 1.4rem 0 0.6rem 0; }
+h2 { font-size: 1.6rem; margin: 1.2rem 0 0.5rem 0; }
+h3 { font-size: 1.4rem; margin: 1.1rem 0 0.5rem 0; }
+h4 { font-size: 1.2rem; margin: 1.0rem 0 0.5rem 0; }
+h5 { font-size: 1.1rem; margin: 1.0rem 0 0.5rem 0; }
+h6 { font-size: 1.0rem; margin: 1.0rem 0 0.5rem 0; }
 header { display: block; }
 html {
   background: white;
@@ -31,9 +38,9 @@ html {
 }
 section { display: block; }
 nav { display: block; }
-p { margin: 0; }
+p { margin: 0.5rem 0; }
 pre {
-  background: #EEEEEE;
+  background: #F0F0F0;
   font-family: source code pro, menlo, terminal, monospace;
   font-size: 1rem;
   overflow: auto;
@@ -55,13 +62,15 @@ version_re = re.compile(version_pattern)
 license_re = re.compile(r'(©|Copyright|Dedicated to the public domain).*\n')
 
 # line states.
-s_begin, s_license, s_blank, s_hash, s_bullet, s_indent, s_text, s_end = range(8)
+s_begin, s_license, s_blank, s_hash, s_bullet, s_indent, s_quote, s_text, s_end = range(9)
 
 matchers = [
   (s_blank, re.compile(r'(\s*)\n')),
   (s_hash, re.compile(r'(#+)(\s*)(.*)\n')),
   (s_bullet, re.compile(r'(\s*)•(\s*)(.*)\n')),
-  (s_indent, re.compile(r'  (.*)\n'))]
+  (s_indent, re.compile(r'  (.*)\n')),
+  (s_quote, re.compile(r'> (.*\n)')),
+]
 
 
 def errF(fmt, *items):
@@ -93,41 +102,33 @@ def minify_css(src):
   return ' '.join(chunks) # use empty string joiner for more aggressive minification.
 
 
-def writeup(in_lines, line_offset, title, description, author, css):
-  'generate html from a writeup file (or stream of lines).'
-
+def writeup_body(in_lines, line_offset):
+  'from input writeup lines, generate a list of html lines.'
   out_lines = []
   def out(depth, *items):
     s = ' ' * (depth * 2) + ''.join(items)
     out_lines.append(s)
-
-  out(0, '''\
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>{}</title>
-  <meta name="description" content="{}">
-  <meta name="author" content="{}">
-  <style text="text/css">{}</style>
-</head>
-<body>\
-'''.format(title, description, author, css))
 
   # state variables used by writeup_line.
   section_depth = 0
   list_depth = 0
   license_lines = []
   pre_lines = []
+  quote_line_num = 0
+  quote_lines = []
 
   def writeup_line(line_num, line, prev_state, state, groups):
     'process a line.'
     nonlocal section_depth
     nonlocal list_depth
-    nonlocal license_lines
+    nonlocal quote_line_num
 
     def warn(fmt, *items):
       errFL('warning: line {}: ' + fmt, line_offset + line_num + 1, *items)
       errFL("  '{}'", repr(line))
+
+    def error(fmt, *items):
+      fail('error: line {}: ' + fmt, line_offset + line_num + 1, *items)
 
     def check_whitespace(len_exp, string, msg_suffix=''):
       for i, c in enumerate(string):
@@ -147,28 +148,42 @@ def writeup(in_lines, line_offset, title, description, author, css):
     # transition.
     if prev_state == s_begin:
       pass
-    if prev_state == s_license:
+    elif prev_state == s_license:
       pass
     elif prev_state == s_blank:
       pass
     elif prev_state == s_hash:
       pass
+
     elif prev_state == s_bullet:
       if state != s_bullet:
         for i in range(list_depth, 0, -1):
           out(section_depth + (i - 1), '</ul>')
         list_depth = 0
+    
     elif prev_state == s_indent:
       if state != s_indent:
         # a newline after the open tag looks ok,
         # but a final newline between pre content and the close tag looks bad.
         out(0, '<pre>\n{}</pre>'.format('\n'.join(pre_lines)))
         pre_lines.clear()
+    
+    elif prev_state == s_quote:
+      if state != s_quote:
+        out(section_depth, '<blockquote>')
+        for ql in writeup_body(quote_lines, quote_line_num):
+          out(section_depth + 1, ql)
+        out(section_depth, '</blockquote>')
+        quote_lines.clear()
+    
     elif prev_state == s_text:
-      if state != s_text:
+      if state == s_text:
+        out(section_depth, '<br />')
+      else:
         out(section_depth, '</p>')
+    
     else:
-      fail('bad prev_state: {}', prev_state)
+      error('bad prev_state: {}', prev_state)
 
     # output text.
 
@@ -214,6 +229,12 @@ def writeup(in_lines, line_offset, title, description, author, css):
       text, = groups
       pre_lines.append(esc(text))
 
+    elif state == s_quote:
+      quoted_line, = groups
+      if state != s_quote:
+        quote_line_num = line_num
+      quote_lines.append(quoted_line)
+
     elif state == s_text:
       # TODO: check for strange characters that html will ignore.
       if not line.endswith('\n'):
@@ -228,10 +249,9 @@ def writeup(in_lines, line_offset, title, description, author, css):
         out(i - 1, '</section>')
       if license_lines:
         out(0, '<footer>\n', '<br />'.join(license_lines), '\n</footer>')
-      out(0, '</body>\n</html>')
 
     else:
-      fail('bad state: {}', state)
+      error('bad state: {}', state)
 
 
   prev_state = s_begin
@@ -263,6 +283,25 @@ def writeup(in_lines, line_offset, title, description, author, css):
   # finish.
   writeup_line(None, None, prev_state, s_end, None)
   return out_lines
+
+
+def writeup(in_lines, line_offset, title, description, author, css):
+  'generate a complete html document from a writeup file (or stream of lines).'
+
+  lines = writeup_body(in_lines, line_offset)
+  lines.insert(0, '''\
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{}</title>
+  <meta name="description" content="{}">
+  <meta name="author" content="{}">
+  <style text="text/css">{}</style>
+</head>
+<body>\
+'''.format(title, description, author, css))
+  lines.append('</body>\n</html>')
+  return lines
 
 
 if __name__ == '__main__':
