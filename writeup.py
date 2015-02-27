@@ -93,16 +93,15 @@ def minify_css(src):
   return ' '.join(chunks) # use empty string joiner for more aggressive minification.
 
 
-def writeup(in_lines, out_file, line_offset, title, description, author, css):
+def writeup(in_lines, line_offset, title, description, author, css):
   'generate html from a writeup file (or stream of lines).'
 
+  out_lines = []
   def out(depth, *items):
-    print(' ' * (depth * 2), *items, sep='', end='', file=out_file)
+    s = ' ' * (depth * 2) + ''.join(items)
+    out_lines.append(s)
 
-  def outL(depth, *items):
-    print(' ' * (depth * 2), *items, sep='', file=out_file)
-
-  outL(0, '''\
+  out(0, '''\
 <html>
 <head>
   <meta charset="utf-8">
@@ -118,6 +117,7 @@ def writeup(in_lines, out_file, line_offset, title, description, author, css):
   section_depth = 0
   list_depth = 0
   license_lines = []
+  pre_lines = []
 
   def writeup_line(line_num, line, prev_state, state, groups):
     'process a line.'
@@ -156,14 +156,17 @@ def writeup(in_lines, out_file, line_offset, title, description, author, css):
     elif prev_state == s_bullet:
       if state != s_bullet:
         for i in range(list_depth, 0, -1):
-          outL(section_depth + (i - 1), '</ul>')
+          out(section_depth + (i - 1), '</ul>')
         list_depth = 0
     elif prev_state == s_indent:
       if state != s_indent:
-        outL(0, '</pre>')
+        # a newline after the open tag looks ok,
+        # but a final newline between pre content and the close tag looks bad.
+        out(0, '<pre>\n{}</pre>'.format('\n'.join(pre_lines)))
+        pre_lines.clear()
     elif prev_state == s_text:
       if state != s_text:
-        outL(section_depth, '</p>')
+        out(section_depth, '</p>')
     else:
       fail('bad prev_state: {}', prev_state)
 
@@ -181,15 +184,15 @@ def writeup(in_lines, out_file, line_offset, title, description, author, css):
       h = min(6, depth)
       if section_depth < depth: # deepen.
         for i in range(section_depth, depth):
-          outL(i, '<section class="s{}">'.format(i + 1))
+          out(i, '<section class="s{}">'.format(i + 1))
       elif section_depth > depth: # surface; close prev child sections and open new peer.
         for i in range(section_depth, depth - 1, -1):
-          outL(i - 1, '</section>')
-        outL(depth - 1, '<section class="s{}">'.format(depth))
+          out(i - 1, '</section>')
+        out(depth - 1, '<section class="s{}">'.format(depth))
       else: # close current section and open new peer.
-        outL(depth - 1, '</section>')
-        outL(depth - 1, '<section class="s{}">'.format(depth))
-      outL(depth, '<h{}>{}</h{}>'.format(h, esc(text), h))
+        out(depth - 1, '</section>')
+        out(depth - 1, '<section class="s{}">'.format(depth))
+      out(depth, '<h{}>{}</h{}>'.format(h, esc(text), h))
       section_depth = depth
 
     elif state == s_bullet:
@@ -201,17 +204,15 @@ def writeup(in_lines, out_file, line_offset, title, description, author, css):
       depth = l // 2 + 1
       check_whitespace(1, spaces, ' following bullet')
       for i in range(list_depth, depth, -1):
-        outL(section_depth + (i - 1), '</ul>')
+        out(section_depth + (i - 1), '</ul>')
       for i in range(list_depth, depth):
-        outL(section_depth + i, '<ul class="l{}">'.format(i + 1))
-      outL(section_depth + depth, '<li>{}</li>'.format(esc(text)))
+        out(section_depth + i, '<ul class="l{}">'.format(i + 1))
+      out(section_depth + depth, '<li>{}</li>'.format(esc(text)))
       list_depth = depth
 
     elif state == s_indent:
       text, = groups
-      if prev_state != s_indent:
-        out(section_depth, '<pre>') # a final newline between content and close tag looks bad.
-      out(0, '\n', esc(text)) # but for whatever reason a newline after the open tag is ok.
+      pre_lines.append(esc(text))
 
     elif state == s_text:
       # TODO: check for strange characters that html will ignore.
@@ -219,15 +220,15 @@ def writeup(in_lines, out_file, line_offset, title, description, author, css):
         warn("missing newline ('\\n')")
       text = line.strip()
       if prev_state != s_text:
-        outL(section_depth, '<p>')
-      outL(section_depth + 1, esc(text))
+        out(section_depth, '<p>')
+      out(section_depth + 1, esc(text))
 
     elif state == s_end:
       for i in range(section_depth, 0, -1):
-        outL(i - 1, '</section>')
+        out(i - 1, '</section>')
       if license_lines:
-        outL(0, '<footer>\n', '<br />'.join(license_lines), '\n</footer>')
-      outL(0, '</body>\n</html>')
+        out(0, '<footer>\n', '<br />'.join(license_lines), '\n</footer>')
+      out(0, '</body>\n</html>')
 
     else:
       fail('bad state: {}', state)
@@ -261,6 +262,7 @@ def writeup(in_lines, out_file, line_offset, title, description, author, css):
 
   # finish.
   writeup_line(None, None, prev_state, s_end, None)
+  return out_lines
 
 
 if __name__ == '__main__':
@@ -278,5 +280,8 @@ if __name__ == '__main__':
   check(v == 0, 'unsupported version number: {}', v)
   version = int(m.group(1))
   css = minify_css(default_css)
-  writeup(f_in, f_out, line_offset=1, title=('stdin' if len_args == 0 else args[0]),
+  lines = writeup(f_in, line_offset=1, title=('stdin' if len_args == 0 else args[0]),
     description='', author='', css=css)
+  for line in lines:
+    print(line, file=f_out)
+
