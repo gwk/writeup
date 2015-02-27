@@ -22,6 +22,11 @@ body footer {
   font-size: .875rem;
   color: #606060;
 }
+code {
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+  font-family: source code pro, menlo, terminal, monospace;
+}
 footer { display: block; }
 h1 { font-size: 2.0rem; margin: 1.4rem 0 0.6rem 0; }
 h2 { font-size: 1.6rem; margin: 1.2rem 0 0.5rem 0; }
@@ -47,6 +52,7 @@ pre {
   padding: 0.1rem;
 }
 ul {
+  line-height: 1.2;
   list-style-type: disc;
   margin: 0;
   padding: 0 1rem;
@@ -145,6 +151,23 @@ def writeup_body(in_lines, line_offset):
     def esc(text):
       return html.escape(text, quote=False)
 
+    inline_split_re = re.compile(r'(`(?:[^`]|\\`)*`)')
+    inline_chunk_re = re.compile(r'`((?:[^`]|\\`)*)`')
+    inline_space_re = re.compile(r'( +)')
+    def conv(text):
+      # lame that we have to split, then match again to tell what kind of chunk we have.
+      chunks = inline_split_re.split(text)
+      converted = []
+      for c in chunks:
+        m = inline_chunk_re.fullmatch(c)
+        if m:
+          g = m.group(1)
+          code = inline_space_re.sub(lambda sm: '&nbsp;' * len(sm.group(1)), esc(g))
+          converted.append('<code>{}</code>'.format(code))
+        else:
+          converted.append(esc(c))
+      return ''.join(converted)
+
     # transition.
     if prev_state == s_begin:
       pass
@@ -207,7 +230,7 @@ def writeup_body(in_lines, line_offset):
       else: # close current section and open new peer.
         out(depth - 1, '</section>')
         out(depth - 1, '<section class="s{}">'.format(depth))
-      out(depth, '<h{}>{}</h{}>'.format(h, esc(text), h))
+      out(depth, '<h{}>{}</h{}>'.format(h, conv(text), h))
       section_depth = depth
 
     elif state == s_bullet:
@@ -222,7 +245,7 @@ def writeup_body(in_lines, line_offset):
         out(section_depth + (i - 1), '</ul>')
       for i in range(list_depth, depth):
         out(section_depth + i, '<ul class="l{}">'.format(i + 1))
-      out(section_depth + depth, '<li>{}</li>'.format(esc(text)))
+      out(section_depth + depth, '<li>{}</li>'.format(conv(text)))
       list_depth = depth
 
     elif state == s_indent:
@@ -233,7 +256,7 @@ def writeup_body(in_lines, line_offset):
       quoted_line, = groups
       if state != s_quote:
         quote_line_num = line_num
-      quote_lines.append(quoted_line)
+      quote_lines.append(quoted_line) # not converted here; text is fully transformed later.
 
     elif state == s_text:
       # TODO: check for strange characters that html will ignore.
@@ -242,7 +265,7 @@ def writeup_body(in_lines, line_offset):
       text = line.strip()
       if prev_state != s_text:
         out(section_depth, '<p>')
-      out(section_depth + 1, esc(text))
+      out(section_depth + 1, conv(text))
 
     elif state == s_end:
       for i in range(section_depth, 0, -1):

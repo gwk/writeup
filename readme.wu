@@ -16,25 +16,43 @@ All of the source code and documentation is dedicated to the public domain under
 # Format
 
 Writeup documents consist of:
-• an initial required version line, e.g.: `writeup v0`
+• an initial required version line, e.g.: `writeup v0`.
 • optional consecutive copyright/license lines at the beginning of the document, followed by a blank line. Recognized prefixes:
-  • '©'
-  • 'Copyright'
-  • 'Dedicated to the public domain'
+  • `©`
+  • `Copyright`
+  • `Dedicated to the public domain`
 • blank lines, containing only whitespace characters.
-• hash lines, beginning with one or more hash ('#') characters.
-• bullet lines, beginning with zero or more pairs of spaces, followed by a bullet ('•') character (opt-8 on OSX English keyboards).
-• indented lines, indented by two or more spaces.
+• header lines, beginning with one or more hash `#` characters.
+• list lines, beginning with zero or more pairs of spaces, followed by a bullet `•` character (opt-8 on OSX English keyboards).
+• code lines, indented by two or more spaces `  `.
+• quote lines, prefixed with `> `.
 • text lines, which are any lines that don't match the above criteria.
 
-The following translation rules are similar to Github Flavored Markdown (GFD):
-• newlines between paragraphs insert a <br> between the lines of text.
-• a single blank separates paragraphs (<p>).
-• otherwise blank lines are ignored.
-• a hash line denotes a section with a header whose numerical level is indicated by the number of hash symbols.
-  • note: Markdown does not create a section, only a header.
-  • sections are translated into nested <section> tags, containing the appropriate <h1> through <h6> tags.
+These are translated as follows:
+• line breaks are inserted between text lines.
+• a single blank separates text lines into paragraphs.
+• otherwise blank lines simply close out other block elements.
+• a header line denotes a section with a header whose numerical level is indicated by the number of hash symbols.
+  • sections are translated into nested `<section>` elements, containing the appropriate `<h1>` through `<h6>` header elements.
   • sections deeper than depth 6 have their header number clamped to 6, in order to produce conformant HTML.
+
+## Comparison to Markdown
+Writeup differs from Github Flavored Markdown (GFD) in the following ways:
+• Writeup headers create a hierarchical structure of `<section>` blocks in the document; Markdown has a flat structure.
+• Writeup does not support:
+  • italics with `*`, bold with `**`, both with `_`, or strikethrough with `~~`.
+  • link syntax `[http://...](name...)`.
+  • ordered lists.
+  • fenced codeblocks with `\`\`\`:
+    • redundant with indent blocks, which look cleaner in the source.
+  • tables.
+
+Furthermore, the following features should be implemented in Writeup to match GFD:
+• unordered lists using `*` or `-`?
+  • seems reasonable to make it possible to author Writeup files in pure ASCII.
+  • however, would prefer a single way doing things.
+• inline backticks for code formatting.
+• URL autolinking.
 
 ## Warnings
 Warnings are issued for the following conditions:
