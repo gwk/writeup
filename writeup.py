@@ -68,14 +68,16 @@ version_re = re.compile(version_pattern)
 license_re = re.compile(r'(©|Copyright|Dedicated to the public domain).*\n')
 
 # line states.
-s_begin, s_license, s_blank, s_hash, s_bullet, s_indent, s_quote, s_text, s_end = range(9)
+s_start, s_license, s_hash, s_bullet, s_quote, s_indent, s_blank, s_text, s_end = range(9)
+
+state_letters = 'SLHBQIKTE'
 
 matchers = [
-  (s_blank, re.compile(r'(\s*)\n')),
   (s_hash, re.compile(r'(#+)(\s*)(.*)\n')),
   (s_bullet, re.compile(r'(\s*)•(\s*)(.*)\n')),
-  (s_indent, re.compile(r'  (.*)\n')),
   (s_quote, re.compile(r'> (.*\n)')),
+  (s_indent, re.compile(r'  (.*)\n')),
+  (s_blank, re.compile(r'(\s*)\n')),
 ]
 
 
@@ -96,9 +98,10 @@ def check(cond, fmt, *items):
 
 # need to preserve spaces in between multiple words followed by semicolon,
 # for cases like `margin: 0 0 0 0;`.
-# the first option of this re is captures these chunks; other splits will return None.
-# we could be more agressive but this is good enough for now.
-minify_css_re = re.compile(r'(?<=: )(.+?;)|\s+|/\*.+?\*/', flags=re.S)
+# the first choice clause captures these chunks in group 1;
+# other choice clauses cause group 1 to hold None.
+# we could do more agressive minification but this is good enough for now.
+minify_css_re = re.compile(r'(?<=: )(.+?;)|\s+|/\*.*?\*/', flags=re.S)
 
 def minify_css(src):
   chunks = []
@@ -128,6 +131,8 @@ def writeup_body(in_lines, line_offset):
     nonlocal section_depth
     nonlocal list_depth
     nonlocal quote_line_num
+
+    #errF('{:03}{}{}: {}', line_num + 1, state_letters[prev_state], state_letters[state], line)
 
     def warn(fmt, *items):
       errFL('warning: line {}: ' + fmt, line_offset + line_num + 1, *items)
@@ -169,11 +174,9 @@ def writeup_body(in_lines, line_offset):
       return ''.join(converted)
 
     # transition.
-    if prev_state == s_begin:
+    if prev_state == s_start:
       pass
     elif prev_state == s_license:
-      pass
-    elif prev_state == s_blank:
       pass
     elif prev_state == s_hash:
       pass
@@ -188,6 +191,7 @@ def writeup_body(in_lines, line_offset):
       if state != s_indent:
         # a newline after the open tag looks ok,
         # but a final newline between pre content and the close tag looks bad.
+        # therefore we must take care to format the pre contents without a final newline.
         out(0, '<pre>\n{}</pre>'.format('\n'.join(pre_lines)))
         pre_lines.clear()
     
@@ -199,6 +203,9 @@ def writeup_body(in_lines, line_offset):
         out(section_depth, '</blockquote>')
         quote_lines.clear()
     
+    elif prev_state == s_blank:
+      pass
+
     elif prev_state == s_text:
       if state == s_text:
         out(section_depth, '<br />')
@@ -210,12 +217,7 @@ def writeup_body(in_lines, line_offset):
 
     # output text.
 
-    if state == s_blank:
-      spaces, = groups
-      if len(spaces):
-        warn("blank line is not empty: spaces: '{}'", repr(spaces))
-
-    elif state == s_hash:
+    if state == s_hash:
       hashes, spaces, text = groups
       check_whitespace(1, spaces)
       depth = len(hashes)
@@ -258,6 +260,11 @@ def writeup_body(in_lines, line_offset):
         quote_line_num = line_num
       quote_lines.append(quoted_line) # not converted here; text is fully transformed later.
 
+    elif state == s_blank:
+      spaces, = groups
+      if len(spaces):
+        warn('blank line is not empty')
+
     elif state == s_text:
       # TODO: check for strange characters that html will ignore.
       if not line.endswith('\n'):
@@ -277,10 +284,10 @@ def writeup_body(in_lines, line_offset):
       error('bad state: {}', state)
 
 
-  prev_state = s_begin
+  prev_state = s_start
   for line_num, line in enumerate(in_lines):
     # any license notice at top gets moved to a footer at the bottom of the html.
-    if prev_state == s_begin and license_re.fullmatch(line):
+    if prev_state == s_start and license_re.fullmatch(line):
       license_lines.append(line.strip())
       prev_state = s_license
       continue
