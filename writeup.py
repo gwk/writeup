@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 # Dedicated to the public domain under CC0: https://creativecommons.org/publicdomain/zero/1.0/.
 
-import sys
-import re
+import argparse
 import html
+import re
+import sys
 
-default_css = '''
+
+css = '''
 a { background-color: transparent; }
 a:active { outline: 0; }
 a:hover { outline: 0; }
@@ -16,7 +18,9 @@ blockquote {
   margin: 0;
   padding: 0 1rem;
 }
-body { margin: 1rem; }
+body {
+  margin: 1rem;
+  }
 body footer {
   margin: 1rem 0 0 0;
   font-size: .875rem;
@@ -38,7 +42,7 @@ header { display: block; }
 html {
   background: white;
   color: black; 
-  font-family: sans-serif;
+  font-family: source sans pro, sans-serif;
   font-size: 1rem;
 }
 section { display: block; }
@@ -58,6 +62,34 @@ ul {
   padding: 0 1rem;
 }
 '''
+
+presentation_css ='''
+body {
+  zoom: 2.0;
+}
+.s1 {
+  height: 100%;
+}
+h1 {
+}
+'''
+
+js = '''
+window.onkeydown = function(e) { 
+  //return !(e.keyCode == 32);
+};
+
+function scrollToSection(id){
+    var section = document.getElementById(id);
+    //section.style.display = 'block';
+    section.scrollIntoView(true);
+    return false;
+}
+'''
+
+# onclick=esc_attr('return scrollToSection("{}")'.format(next_sid)
+# '<... onclick="{onclick}">'.format(onclick=onclick)
+
 
 # version pattern is applied to the first line of documents;
 # programs processing input strings may or may not check for a version as appropriate.
@@ -111,9 +143,15 @@ def minify_css(src):
   return ' '.join(chunks) # use empty string joiner for more aggressive minification.
 
 
-def writeup_body(in_lines, line_offset):
-  'from input writeup lines, generate a list of html lines.'
-  out_lines = []
+def esc(text):
+  return html.escape(text, quote=False)
+
+def esc_attr(text):
+  return html.escape(text, quote=True)
+
+  
+def writeup_body(out_lines, in_lines, line_offset):
+  'from input writeup lines, output html lines.'
   def out(depth, *items):
     s = ' ' * (depth * 2) + ''.join(items)
     out_lines.append(s)
@@ -132,14 +170,14 @@ def writeup_body(in_lines, line_offset):
     nonlocal list_depth
     nonlocal quote_line_num
 
-    #errF('{:03}{}{}: {}', line_num + 1, state_letters[prev_state], state_letters[state], line)
+    #errF('{:03} {}{}: {}', line_num, state_letters[prev_state], state_letters[state], line)
 
     def warn(fmt, *items):
-      errFL('warning: line {}: ' + fmt, line_offset + line_num + 1, *items)
+      errFL('warning: line {}: ' + fmt, line_num, *items)
       errFL("  '{}'", repr(line))
 
     def error(fmt, *items):
-      fail('error: line {}: ' + fmt, line_offset + line_num + 1, *items)
+      fail('error: line {}: ' + fmt, line_num, *items)
 
     def check_whitespace(len_exp, string, msg_suffix=''):
       for i, c in enumerate(string):
@@ -152,9 +190,6 @@ def writeup_body(in_lines, line_offset):
           len_exp, '' if len_exp == 1 else 's', msg_suffix, len(string))
         return False
       return True
-
-    def esc(text):
-      return html.escape(text, quote=False)
 
     inline_split_re = re.compile(r'(`(?:[^`]|\\`)*`)')
     inline_chunk_re = re.compile(r'`((?:[^`]|\\`)*)`')
@@ -198,7 +233,9 @@ def writeup_body(in_lines, line_offset):
     elif prev_state == s_quote:
       if state != s_quote:
         out(section_depth, '<blockquote>')
-        for ql in writeup_body(quote_lines, quote_line_num):
+        quoted_lines = []
+        writeup_body(quoted_lines, quote_lines, quote_line_num)
+        for ql in quoted_lines:
           out(section_depth + 1, ql)
         out(section_depth, '</blockquote>')
         quote_lines.clear()
@@ -223,15 +260,16 @@ def writeup_body(in_lines, line_offset):
       depth = len(hashes)
       h = min(6, depth)
       if section_depth < depth: # deepen.
-        for i in range(section_depth, depth):
-          out(i, '<section class="s{}">'.format(i + 1))
+        for i in range(section_depth, depth - 1):
+          out(i, '<section class="s{}">'.format(i + 1)) # implied section.
       elif section_depth > depth: # surface; close prev child sections and open new peer.
         for i in range(section_depth, depth - 1, -1):
-          out(i - 1, '</section>')
-        out(depth - 1, '<section class="s{}">'.format(depth))
+          out(i - 1, '</section>') # close previous.
       else: # close current section and open new peer.
         out(depth - 1, '</section>')
-        out(depth - 1, '<section class="s{}">'.format(depth))
+      # current.
+      sid = 'unimplemented'
+      out(depth - 1, '<section class="s{}" id="{}">'.format(depth, sid))
       out(depth, '<h{}>{}</h{}>'.format(h, conv(text), h))
       section_depth = depth
 
@@ -307,50 +345,72 @@ def writeup_body(in_lines, line_offset):
         groups = m.groups()
         break
 
-    writeup_line(line_num, line, prev_state, state, groups)
+    writeup_line(line_offset + line_num, line, prev_state, state, groups)
     prev_state = state
 
   # finish.
-  writeup_line(None, None, prev_state, s_end, None)
-  return out_lines
+  writeup_line(line_num + 1, '\n', prev_state, s_end, None)
 
 
-def writeup(in_lines, line_offset, title, description, author, css):
+def writeup(in_lines, line_offset, title, description, author, css, js):
   'generate a complete html document from a writeup file (or stream of lines).'
 
-  lines = writeup_body(in_lines, line_offset)
-  lines.insert(0, '''\
+  html_lines = ['''\
 <html>
 <head>
   <meta charset="utf-8">
-  <title>{}</title>
-  <meta name="description" content="{}">
-  <meta name="author" content="{}">
-  <style text="text/css">{}</style>
+  <title>{title}</title>
+  <meta name="description" content="{description}">
+  <meta name="author" content="{author}">
+  <style text="text/css">{css}</style>
+  <script>{js}</script>
 </head>
 <body>\
-'''.format(title, description, author, css))
-  lines.append('</body>\n</html>')
-  return lines
+'''.format(title=title, description=description, author=author, css=css, js=js)]
+
+  writeup_body(html_lines, in_lines, line_offset)
+
+  html_lines.append('</body>\n</html>')
+  return html_lines
 
 
 if __name__ == '__main__':
-  len_args = len(sys.argv) - 1
-  args = sys.argv[1:]
-  check(len_args <= 2, 
-    'expects 0 args (stdin -> stdout), 1 arg (path -> stdout), or 2 args (path -> path)')
-  f_in  = sys.stdin if len_args == 0 else open(args[0])
-  f_out = sys.stdout if len_args < 2 else open(args[1], 'w')
+  
+  arg_parser = argparse.ArgumentParser(description='convert .wu files to html')
+  arg_parser.add_argument('-presentation', action='store_true', help='add presentation mode css')
+  arg_parser.add_argument('src_path', nargs='?', help='input .wu source path (defaults to stdin)')
+  arg_parser.add_argument('dst_path', nargs='?', help='output .html path (defaults to stdout)')
+
+  args = arg_parser.parse_args()
+
+  # paths.
+  check(args.src_path or args.src_path is None, 'src_path cannot be empty string')
+  check(args.dst_path or args.dst_path is None, 'dst_path cannot be empty string')
+
+  f_in  = open(args.src_path) if args.src_path else sys.stdin
+  f_out = open(args.dst_path) if args.dst_path else sys.stdout
+
+  # version.
   version_line = f_in.readline()
   m = version_re.fullmatch(version_line)
-  check(m, 'first line must specify writeup version matching pattern: {}\nfound: {}',
-    repr(version_pattern), repr(version_line))
-  v = int(m.group(1))
-  check(v == 0, 'unsupported version number: {}', v)
+  check(m, 'first line must specify writeup version matching pattern: {!r}\nfound: {!r}',
+    version_pattern, version_line)
   version = int(m.group(1))
-  css = minify_css(default_css)
-  lines = writeup(f_in, line_offset=1, title=('stdin' if len_args == 0 else args[0]),
-    description='', author='', css=css)
-  for line in lines:
+  check(version == 0, 'unsupported version number: {}', version)
+
+  # css.
+  if args.presentation:
+    css += presentation_css
+  css = minify_css(css)
+
+  html_lines = writeup(f_in,
+    line_offset=(1 + 1), # 1-indexed, account for version line.
+    title=(args.src_path or 'stdin'),
+    description='',
+    author='',
+    css=css,
+    js=js)
+
+  for line in html_lines:
     print(line, file=f_out)
 
