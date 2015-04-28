@@ -14,9 +14,9 @@ a:hover { outline: 0; }
 blockquote {
   border-left-color: #E0E0E0;
   border-left-style: solid;
-  border-left-width: 0.25rem;
+  border-left-width: 0.333rem; /* matches width of ul bullets. */
   margin: 0;
-  padding: 0 1rem;
+  padding: 0 0.677rem; /* matches width of ul bullet margin; how can we set that explicitly?. */
 }
 body {
   margin: 1rem;
@@ -56,10 +56,11 @@ pre {
   padding: 0.1rem;
 }
 ul {
-  line-height: 1.2;
+  line-height: 1.2rem;
+  list-style-position: inside;
   list-style-type: disc;
   margin: 0;
-  padding: 0 1rem;
+  padding: 0 0rem;
 }
 '''
 
