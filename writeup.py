@@ -32,6 +32,11 @@ code {
   font-family: source code pro, menlo, terminal, monospace;
 }
 footer { display: block; }
+h1 {
+  border-top-color: #E8E8E8;
+  border-top-style: solid;
+  border-top-width: 1px;
+}
 h1 { font-size: 2.0rem; margin: 1.4rem 0 0.6rem 0; }
 h2 { font-size: 1.6rem; margin: 1.2rem 0 0.5rem 0; }
 h3 { font-size: 1.4rem; margin: 1.1rem 0 0.5rem 0; }
