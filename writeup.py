@@ -69,14 +69,9 @@ ul {
 }
 '''
 
-presentation_css ='''
-body {
-  zoom: 2.0;
-}
+presentation_css = '''
 .s1 {
-  height: 100%;
-}
-h1 {
+  min-height: 100%;
 }
 '''
 
