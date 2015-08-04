@@ -363,7 +363,8 @@ def writeup(in_lines, line_offset, title, description, author, css, js):
   <title>{title}</title>
   <meta name="description" content="{description}">
   <meta name="author" content="{author}">
-  <style text="text/css">{css}</style>
+  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
+  <style type="text/css">{css}</style>
   <script>{js}</script>
 </head>
 <body>\
