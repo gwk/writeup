@@ -61,7 +61,7 @@ pre {
   padding: 0.1rem;
 }
 ul {
-  line-height: 1.2rem;
+  line-height: 1.333rem;
   list-style-type: none;
   margin: 0rem;
   padding: 0rem;
