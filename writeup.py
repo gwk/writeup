@@ -103,15 +103,15 @@ version_re = re.compile(version_pattern)
 license_re = re.compile(r'(©|Copyright|Dedicated to the public domain).*\n')
 
 # line states.
-s_start, s_license, s_hash, s_list, s_quote, s_indent, s_blank, s_text, s_end = range(9)
+s_start, s_license, s_section, s_list, s_quote, s_code, s_blank, s_text, s_end = range(9)
 
-state_letters = 'SLHBQIKTE'
+state_letters = '_©SLQCBTE'
 
 matchers = [
-  (s_hash, re.compile(r'(#+)(\s*)(.*)\n')),
+  (s_section, re.compile(r'(#+)(\s*)(.*)\n')),
   (s_list, re.compile(r'(\s*)-(\s*)(.*)\n')),
   (s_quote, re.compile(r'> (.*\n)')),
-  (s_indent, re.compile(r'\| (.*)\n')),
+  (s_code, re.compile(r'\| (.*)\n')),
   (s_blank, re.compile(r'(\s*)\n')),
 ]
 
@@ -218,7 +218,7 @@ def writeup_body(out_lines, in_lines, line_offset):
       pass
     elif prev_state == s_license:
       pass
-    elif prev_state == s_hash:
+    elif prev_state == s_section:
       pass
 
     elif prev_state == s_list:
@@ -227,8 +227,8 @@ def writeup_body(out_lines, in_lines, line_offset):
           out(section_depth + (i - 1), '</ul>')
         list_depth = 0
     
-    elif prev_state == s_indent:
-      if state != s_indent:
+    elif prev_state == s_code:
+      if state != s_code:
         # a newline after the open tag looks ok,
         # but a final newline between pre content and the close tag looks bad.
         # therefore we must take care to format the pre contents without a final newline.
@@ -259,7 +259,7 @@ def writeup_body(out_lines, in_lines, line_offset):
 
     # output text.
 
-    if state == s_hash:
+    if state == s_section:
       hashes, spaces, text = groups
       check_whitespace(1, spaces)
       depth = len(hashes)
@@ -294,7 +294,7 @@ def writeup_body(out_lines, in_lines, line_offset):
       out(section_depth + depth, '<li>• {}</li>'.format(conv(text)))
       list_depth = depth
 
-    elif state == s_indent:
+    elif state == s_code:
       text, = groups
       pre_lines.append(esc(text))
 
