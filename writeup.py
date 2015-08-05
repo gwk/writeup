@@ -62,10 +62,12 @@ pre {
 }
 ul {
   line-height: 1.2rem;
-  list-style-position: inside;
-  list-style-type: disc;
-  margin: 0;
-  padding: 0 0rem;
+  list-style-type: none;
+  margin: 0rem;
+  padding: 0rem;
+}
+ul > ul {
+  padding-left: 1rem;
 }
 '''
 
@@ -289,7 +291,7 @@ def writeup_body(out_lines, in_lines, line_offset):
         out(section_depth + (i - 1), '</ul>')
       for i in range(list_depth, depth):
         out(section_depth + i, '<ul class="L{}">'.format(i + 1))
-      out(section_depth + depth, '<li>{}</li>'.format(conv(text)))
+      out(section_depth + depth, '<li>• {}</li>'.format(conv(text)))
       list_depth = depth
 
     elif state == s_indent:
