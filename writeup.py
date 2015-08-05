@@ -111,7 +111,7 @@ matchers = [
   (s_hash, re.compile(r'(#+)(\s*)(.*)\n')),
   (s_list, re.compile(r'(\s*)-(\s*)(.*)\n')),
   (s_quote, re.compile(r'> (.*\n)')),
-  (s_indent, re.compile(r'  (.*)\n')),
+  (s_indent, re.compile(r'\| (.*)\n')),
   (s_blank, re.compile(r'(\s*)\n')),
 ]
 

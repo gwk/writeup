@@ -17,24 +17,24 @@ All of the source code and documentation is dedicated to the public domain under
 
 Writeup documents consist of:
 - an initial required version line, e.g.: `writeup v0`.
-- optional consecutive copyright/license lines at the beginning of the document, followed by a blank line. Recognized prefixes:
+- optional consecutive copyright/license lines at the beginning of the document, followed by a blank line. Recognized prefixes are:
   - `©`
   - `Copyright`
   - `Dedicated to the public domain`
 - blank lines, containing only whitespace characters.
 - header lines, beginning with one or more hash `#` characters.
 - list lines, beginning with zero or more pairs of spaces, followed by a dash `-` character.
-- code lines, indented by two or more spaces `  `.
+- code lines, prefixed with `| `.
 - quote lines, prefixed with `> `.
 - text lines, which are any lines that don't match the above criteria.
 
 These are translated as follows:
 - line breaks are inserted between text lines.
 - a single blank separates text lines into paragraphs.
-- otherwise blank lines simply close out other block elements.
+- blank lines close list, code, and quote blocks.
 - a header line denotes a section with a header whose numerical level is indicated by the number of hash symbols.
   - sections are translated into nested `<section>` elements, containing the appropriate `<h1>` through `<h6>` header elements.
-  - sections deeper than depth 6 have their header number clamped to 6, in order to produce conformant HTML.
+  - sections can be nested arbitrarily deeply, but beyond 6 levels will all produce `h6` tags, the maximum supported by HTML5.
 
 ## Comparison to Markdown
 Writeup differs from Github Flavored Markdown (GFD) in the following ways:
@@ -84,15 +84,25 @@ Writeup is currently implemented as a python 3.4 script, depending only on the s
 # Examples
 
 Sections and text:
-  # Header 1
-  line 1
-  ## Header 2
-  line 2
-  Line 3
+| # Header 1
+| line 1
+| - A
+| - B
+|   - B1
+|   - B2
+| - C
+| ## Header 2
+| line 2
+| Line 3
 
 Becomes:
 > # Header 1
 > line 1
+> - A
+> - B
+>   - B1
+>   - B2
+> - C
 > ## Header 2
 > line 2
 > Line 3
