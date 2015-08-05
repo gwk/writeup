@@ -43,7 +43,7 @@ Writeup differs from Github Flavored Markdown (GFD) in the following ways:
   - italics with `*`, bold with `**`, both with `_`, or strikethrough with `~~`.
   - link syntax `[http://...](name...)`.
   - ordered lists.
-  - fenced codeblocks with `\`\`\`:
+  - fenced codeblocks with `\`\`\``:
     - redundant with indent blocks, which look cleaner in the source.
   - tables.
 

@@ -152,7 +152,51 @@ def esc(text):
 def esc_attr(text):
   return html.escape(text, quote=True)
 
-  
+
+# inline span handling.
+
+# general pattern for quoting with escapes is Q([^EQ]|EQ|EE)*Q.
+# it is crucial that the escape character E is excluded in the '[^EQ]' clause,
+# or else when matching against 'QEQQ', the pattern greedily matches 'QEQ'.
+# to enable all inputs, the 'EE' clause is also required.
+
+inline_code_pat = r'`(?:[^\\`]|\\`|\\\\)*`' # for splitting line.
+inline_code_esc_re = re.compile(r'\\`|\\\\') # for escaping quoted code string.
+inline_code_esc_fn = lambda m: m.group(0)[1:] # strip leading escape.
+
+def inline_code_conv(text):
+  text_inner = text[1:-1] # remove surrounding backquotes.
+  text_escaped = inline_code_esc_re.sub(inline_code_esc_fn, text_inner)
+  text_escaped1 = esc(text_escaped)
+  text_spaced = text_escaped1.replace(' ', '&nbsp;')
+  return '<code>{}</code>'.format(text_spaced)
+
+# pattern and associated handler.
+inline_elements = [
+  (inline_code_pat, inline_code_conv)
+]
+
+# wrap each sub-pattern in capturing parentheses.
+inline_split_re = re.compile('|'.join('({})'.format(p) for p, f in inline_elements))
+
+def convert_inline_text(text):
+  converted = []
+  prev_idx = 0
+  for m in inline_split_re.finditer(text):
+    start_idx = m.start()
+    if prev_idx < start_idx: # flush preceding text.
+      converted.append(esc(text[prev_idx:start_idx]))
+    prev_idx = m.end()
+    for i, (p, f) in enumerate(inline_elements, 1): # groups are 1-indexed.
+      g = m.group(i)
+      if g is not None:
+        converted.append(f(g))
+        break
+  if prev_idx < len(text):
+    converted.append(esc(text[prev_idx:]))
+  return ''.join(converted)
+
+
 def writeup_body(out_lines, in_lines, line_offset):
   'from input writeup lines, output html lines.'
   def out(depth, *items):
@@ -195,23 +239,6 @@ def writeup_body(out_lines, in_lines, line_offset):
           len_exp, '' if len_exp == 1 else 's', msg_suffix, len(string))
         return False
       return True
-
-    inline_split_re = re.compile(r'(`(?:[^`]|\\`)*`)')
-    inline_chunk_re = re.compile(r'`((?:[^`]|\\`)*)`')
-    inline_space_re = re.compile(r'( +)')
-    def conv(text):
-      # lame that we have to split, then match again to tell what kind of chunk we have.
-      chunks = inline_split_re.split(text)
-      converted = []
-      for c in chunks:
-        m = inline_chunk_re.fullmatch(c)
-        if m:
-          g = m.group(1)
-          code = inline_space_re.sub(lambda sm: '&nbsp;' * len(sm.group(1)), esc(g))
-          converted.append('<code>{}</code>'.format(code))
-        else:
-          converted.append(esc(c))
-      return ''.join(converted)
 
     # transition.
     if prev_state == s_start:
@@ -277,7 +304,7 @@ def writeup_body(out_lines, in_lines, line_offset):
         out(d - 1, '<section class="S{}" id="s{}">'.format(d, sid))
         prev_index = 0
       # current.
-      out(depth, '<h{} id="h{}">{}</h{}>'.format(h, sid, conv(text), h))
+      out(depth, '<h{} id="h{}">{}</h{}>'.format(h, sid, convert_inline_text(text), h))
 
     elif state == s_list:
       indents, spaces, text = groups
@@ -291,7 +318,9 @@ def writeup_body(out_lines, in_lines, line_offset):
         out(section_depth + (i - 1), '</ul>')
       for i in range(list_depth, depth):
         out(section_depth + i, '<ul class="L{}">'.format(i + 1))
-      out(section_depth + depth, '<li>• {}</li>'.format(conv(text)))
+      # note: the bullet is inserted as part of the text,
+      # so that a user select-and-copy preserves the bullet (indentation is still lost).
+      out(section_depth + depth, '<li>• {}</li>'.format(convert_inline_text(text)))
       list_depth = depth
 
     elif state == s_code:
@@ -316,7 +345,7 @@ def writeup_body(out_lines, in_lines, line_offset):
       text = line.strip()
       if prev_state != s_text:
         out(section_depth, '<p>')
-      out(section_depth + 1, conv(text))
+      out(section_depth + 1, convert_inline_text(text))
 
     elif state == s_end:
       for i in range(section_depth, 0, -1):
