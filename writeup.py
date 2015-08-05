@@ -78,16 +78,27 @@ presentation_css = '''
 '''
 
 js = '''
-window.onkeydown = function(e) { 
-  //return !(e.keyCode == 32);
-};
+"use strict";
 
-function scrollToSection(id){
-    var section = document.getElementById(id);
-    //section.style.display = 'block';
-    section.scrollIntoView(true);
-    return false;
+function scrollToElementId(id) {
+  window.scrollTo(0, document.getElementById(id).offsetTop);
 }
+
+var current_section_idx = 0;
+
+window.onkeydown = function(e) { 
+  if (e.keyCode === 37) { // left.
+    if (current_section_idx > 0) {
+      current_section_idx -= 1;
+      scrollToElementId(section_ids[current_section_idx]);
+    }
+  } else if (e.keyCode === 39) { // right.
+    if (current_section_idx < section_ids.length - 1) {
+      current_section_idx += 1;
+      scrollToElementId(section_ids[current_section_idx]);
+    }
+  }
+};
 '''
 
 # onclick=esc_attr('return scrollToSection("{}")'.format(next_sid)
@@ -204,8 +215,9 @@ def writeup_body(out_lines, in_lines, line_offset):
     out_lines.append(s)
 
   # state variables used by writeup_line.
-  section_stack = []
-  list_depth = 0
+  section_ids = [] # accumulated list of all section ids.
+  section_stack = [] # stack of currently open sections.
+  list_depth = 0 # currently open list depth.
   license_lines = []
   pre_lines = []
   quote_line_num = 0
@@ -290,7 +302,7 @@ def writeup_body(out_lines, in_lines, line_offset):
       hashes, spaces, text = groups
       check_whitespace(1, spaces)
       depth = len(hashes)
-      h = min(6, depth)
+      h_num = min(6, depth)
       prev_index = 0
       while len(section_stack) >= depth: # close previous peer section and its children.
         sid = '.'.join(str(i) for i in section_stack)
@@ -304,7 +316,8 @@ def writeup_body(out_lines, in_lines, line_offset):
         out(d - 1, '<section class="S{}" id="s{}">'.format(d, sid))
         prev_index = 0
       # current.
-      out(depth, '<h{} id="h{}">{}</h{}>'.format(h, sid, convert_inline_text(text), h))
+      out(depth, '<h{} id="h{}">{}</h{}>'.format(h_num, sid, convert_inline_text(text), h_num))
+      section_ids.append('s' + sid)
 
     elif state == s_list:
       indents, spaces, text = groups
@@ -386,6 +399,15 @@ def writeup_body(out_lines, in_lines, line_offset):
   # finish.
   writeup_line(line_num + 1, '\n', prev_state, s_end, None)
 
+  # generate tables.
+  out(0, '<script>')
+  out(0, 'section_ids = [')
+  out(1, '"body",')
+  for sid in section_ids:
+    out(1, '"{}",'.format(sid))
+  out(0, '];')
+  out(0, '</script>')
+
 
 def writeup(in_lines, line_offset, title, description, author, css, js):
   'generate a complete html document from a writeup file (or stream of lines).'
@@ -401,7 +423,7 @@ def writeup(in_lines, line_offset, title, description, author, css, js):
   <style type="text/css">{css}</style>
   <script>{js}</script>
 </head>
-<body>\
+<body id="body">\
 '''.format(title=title, description=description, author=author, css=css, js=js)]
 
   writeup_body(html_lines, in_lines, line_offset)
