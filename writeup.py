@@ -67,7 +67,7 @@ ul {
   padding: 0rem;
 }
 ul > ul {
-  padding-left: 1rem;
+  padding-left: 0.667rem;
 }
 '''
 
