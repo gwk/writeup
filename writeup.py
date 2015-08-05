@@ -72,7 +72,7 @@ ul > ul {
 '''
 
 presentation_css = '''
-.s1 {
+.S1 {
   min-height: 100%;
 }
 '''
