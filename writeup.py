@@ -158,7 +158,7 @@ def writeup_body(out_lines, in_lines, line_offset):
     out_lines.append(s)
 
   # state variables used by writeup_line.
-  section_depth = 0
+  section_stack = []
   list_depth = 0
   license_lines = []
   pre_lines = []
@@ -167,9 +167,11 @@ def writeup_body(out_lines, in_lines, line_offset):
 
   def writeup_line(line_num, line, prev_state, state, groups):
     'process a line.'
-    nonlocal section_depth
+    nonlocal section_stack
     nonlocal list_depth
     nonlocal quote_line_num
+
+    section_depth = len(section_stack)
 
     #errF('{:03} {}{}: {}', line_num, state_letters[prev_state], state_letters[state], line)
 
@@ -260,19 +262,20 @@ def writeup_body(out_lines, in_lines, line_offset):
       check_whitespace(1, spaces)
       depth = len(hashes)
       h = min(6, depth)
-      if section_depth < depth: # deepen.
-        for i in range(section_depth, depth - 1):
-          out(i, '<section class="s{}">'.format(i + 1)) # implied section.
-      elif section_depth > depth: # surface; close prev child sections and open new peer.
-        for i in range(section_depth, depth - 1, -1):
-          out(i - 1, '</section>') # close previous.
-      else: # close current section and open new peer.
-        out(depth - 1, '</section>')
+      prev_index = 0
+      while len(section_stack) >= depth: # close previous peer section and its children.
+        sid = '.'.join(str(i) for i in section_stack)
+        prev_index = section_stack.pop()
+        out(len(section_stack), '</section>') # <!--s{}-->'.format(sid))
+      while len(section_stack) < depth: # open new section and any children.
+        index = prev_index + 1
+        section_stack.append(index)
+        d = len(section_stack)
+        sid = '.'.join(str(i) for i in section_stack)
+        out(d - 1, '<section class="S{}" id="s{}">'.format(d, sid))
+        prev_index = 0
       # current.
-      sid = 'unimplemented'
-      out(depth - 1, '<section class="s{}" id="{}">'.format(depth, sid))
-      out(depth, '<h{}>{}</h{}>'.format(h, conv(text), h))
-      section_depth = depth
+      out(depth, '<h{} id="h{}">{}</h{}>'.format(h, sid, conv(text), h))
 
     elif state == s_bullet:
       indents, spaces, text = groups
@@ -285,7 +288,7 @@ def writeup_body(out_lines, in_lines, line_offset):
       for i in range(list_depth, depth, -1):
         out(section_depth + (i - 1), '</ul>')
       for i in range(list_depth, depth):
-        out(section_depth + i, '<ul class="l{}">'.format(i + 1))
+        out(section_depth + i, '<ul class="L{}">'.format(i + 1))
       out(section_depth + depth, '<li>{}</li>'.format(conv(text)))
       list_depth = depth
 
