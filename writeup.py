@@ -101,13 +101,13 @@ version_re = re.compile(version_pattern)
 license_re = re.compile(r'(©|Copyright|Dedicated to the public domain).*\n')
 
 # line states.
-s_start, s_license, s_hash, s_bullet, s_quote, s_indent, s_blank, s_text, s_end = range(9)
+s_start, s_license, s_hash, s_list, s_quote, s_indent, s_blank, s_text, s_end = range(9)
 
 state_letters = 'SLHBQIKTE'
 
 matchers = [
   (s_hash, re.compile(r'(#+)(\s*)(.*)\n')),
-  (s_bullet, re.compile(r'(\s*)•(\s*)(.*)\n')),
+  (s_list, re.compile(r'(\s*)-(\s*)(.*)\n')),
   (s_quote, re.compile(r'> (.*\n)')),
   (s_indent, re.compile(r'  (.*)\n')),
   (s_blank, re.compile(r'(\s*)\n')),
@@ -219,8 +219,8 @@ def writeup_body(out_lines, in_lines, line_offset):
     elif prev_state == s_hash:
       pass
 
-    elif prev_state == s_bullet:
-      if state != s_bullet:
+    elif prev_state == s_list:
+      if state != s_list:
         for i in range(list_depth, 0, -1):
           out(section_depth + (i - 1), '</ul>')
         list_depth = 0
@@ -277,14 +277,14 @@ def writeup_body(out_lines, in_lines, line_offset):
       # current.
       out(depth, '<h{} id="h{}">{}</h{}>'.format(h, sid, conv(text), h))
 
-    elif state == s_bullet:
+    elif state == s_list:
       indents, spaces, text = groups
       check_whitespace(-1, indents, ' in indent')
       l = len(indents)
       if l % 2:
         warn('odd indentation: {}', l)
       depth = l // 2 + 1
-      check_whitespace(1, spaces, ' following bullet')
+      check_whitespace(1, spaces, ' following dash')
       for i in range(list_depth, depth, -1):
         out(section_depth + (i - 1), '</ul>')
       for i in range(list_depth, depth):

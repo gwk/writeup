@@ -5,9 +5,9 @@ Dedicated to the public domain under CC0: https://creativecommons.org/publicdoma
 # Introduction
 
 Writeup is a text markup format that translates to HTML5. It is similar to Markdown in spirit, but is not equivalent. Some of the differences include:
-• hierarchical sections.
-• special handling of license lines at top of file.
-• format is designed to make correct implementation simple and unambiguous.
+- hierarchical sections.
+- special handling of license lines at the beginning of a file.
+- the format is designed to make correct implementation simple and unambiguous.
 
 ## License
 All of the source code and documentation is dedicated to the public domain under CC0: https://creativecommons.org/.publicdomain/zero/1.0/.
@@ -16,50 +16,43 @@ All of the source code and documentation is dedicated to the public domain under
 # Format
 
 Writeup documents consist of:
-• an initial required version line, e.g.: `writeup v0`.
-• optional consecutive copyright/license lines at the beginning of the document, followed by a blank line. Recognized prefixes:
-  • `©`
-  • `Copyright`
-  • `Dedicated to the public domain`
-• blank lines, containing only whitespace characters.
-• header lines, beginning with one or more hash `#` characters.
-• list lines, beginning with zero or more pairs of spaces, followed by a bullet `•` character (opt-8 on OSX English keyboards).
-• code lines, indented by two or more spaces `  `.
-• quote lines, prefixed with `> `.
-• text lines, which are any lines that don't match the above criteria.
+- an initial required version line, e.g.: `writeup v0`.
+- optional consecutive copyright/license lines at the beginning of the document, followed by a blank line. Recognized prefixes:
+  - `©`
+  - `Copyright`
+  - `Dedicated to the public domain`
+- blank lines, containing only whitespace characters.
+- header lines, beginning with one or more hash `#` characters.
+- list lines, beginning with zero or more pairs of spaces, followed by a dash `-` character.
+- code lines, indented by two or more spaces `  `.
+- quote lines, prefixed with `> `.
+- text lines, which are any lines that don't match the above criteria.
 
 These are translated as follows:
-• line breaks are inserted between text lines.
-• a single blank separates text lines into paragraphs.
-• otherwise blank lines simply close out other block elements.
-• a header line denotes a section with a header whose numerical level is indicated by the number of hash symbols.
-  • sections are translated into nested `<section>` elements, containing the appropriate `<h1>` through `<h6>` header elements.
-  • sections deeper than depth 6 have their header number clamped to 6, in order to produce conformant HTML.
+- line breaks are inserted between text lines.
+- a single blank separates text lines into paragraphs.
+- otherwise blank lines simply close out other block elements.
+- a header line denotes a section with a header whose numerical level is indicated by the number of hash symbols.
+  - sections are translated into nested `<section>` elements, containing the appropriate `<h1>` through `<h6>` header elements.
+  - sections deeper than depth 6 have their header number clamped to 6, in order to produce conformant HTML.
 
 ## Comparison to Markdown
 Writeup differs from Github Flavored Markdown (GFD) in the following ways:
-• Writeup headers create a hierarchical structure of `<section>` blocks in the document; Markdown has a flat structure.
-• Writeup does not support:
-  • italics with `*`, bold with `**`, both with `_`, or strikethrough with `~~`.
-  • link syntax `[http://...](name...)`.
-  • ordered lists.
-  • fenced codeblocks with `\`\`\`:
-    • redundant with indent blocks, which look cleaner in the source.
-  • tables.
-
-Furthermore, the following features should be implemented in Writeup to match GFD:
-• unordered lists using `*` or `-`?
-  • seems reasonable to make it possible to author Writeup files in pure ASCII.
-  • however, would prefer a single way doing things.
-• inline backticks for code formatting.
-• URL autolinking.
+- Writeup headers create a hierarchical structure of `<section>` blocks in the document; Markdown has a flat structure.
+- Writeup does not support:
+  - italics with `*`, bold with `**`, both with `_`, or strikethrough with `~~`.
+  - link syntax `[http://...](name...)`.
+  - ordered lists.
+  - fenced codeblocks with `\`\`\`:
+    - redundant with indent blocks, which look cleaner in the source.
+  - tables.
 
 ## Warnings
 Warnings are issued for the following conditions:
-• a blank line is not empty.
-• the final line does not end with a newline character.
-• indentation is an odd number of spaces.
-• indentation consisting of characters other than spaces.
+- a blank line is not empty.
+- the final line does not end with a newline character.
+- indentation is an odd number of spaces.
+- indentation consisting of characters other than spaces.
 
 
 # Versioning
