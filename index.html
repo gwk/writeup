@@ -7,15 +7,6 @@
   <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
   <style type="text/css">a { background-color: transparent; } a:active { outline: 0; } a:hover { outline: 0; } blockquote { border-left-color: #E0E0E0; border-left-style: solid; border-left-width: 0.333rem; margin: 0; padding: 0 0.677rem; } body { margin: 1rem; } body footer { border-top-color: #E8E8E8; border-top-style: solid; border-top-width: 1px; color: #606060; font-size: .875rem; margin: 1rem 0 0 0; } code { background-color: rgba(0, 0, 0, 0.1); border-radius: 3px; font-family: source code pro, menlo, terminal, monospace; } footer { display: block; } h1 { border-top-color: #E8E8E8; border-top-style: solid; border-top-width: 1px; } h1 { font-size: 2.0rem; margin: 1.4rem 0 0.6rem 0; } h2 { font-size: 1.6rem; margin: 1.2rem 0 0.5rem 0; } h3 { font-size: 1.4rem; margin: 1.1rem 0 0.5rem 0; } h4 { font-size: 1.2rem; margin: 1.0rem 0 0.5rem 0; } h5 { font-size: 1.1rem; margin: 1.0rem 0 0.5rem 0; } h6 { font-size: 1.0rem; margin: 1.0rem 0 0.5rem 0; } header { display: block; } html { background: white; color: black; font-family: source sans pro, sans-serif; font-size: 1rem; } section { display: block; } nav { display: block; } p { margin: 0.5rem 0; } pre { background: #F0F0F0; font-family: source code pro, menlo, terminal, monospace; font-size: 1rem; overflow: auto; padding: 0.1rem; } ul { line-height: 1.333rem; list-style-type: none; margin: 0rem; padding: 0rem; } ul > ul { padding-left: 0.667rem; }</style>
   <script type="text/javascript"> "use strict";
-function applyStyle(selector, attr, val) {
-  let els = document.querySelectorAll(selector);
-  //for (let el of els) { // does not work as of chrome 44, firefox 39.
-  for (var i = 0; i < els.length; i++) {
-    let el = els[i];
-    el.style[attr] = val;
-  }
-}
-
 function scrollToElementId(id) {
   window.scrollTo(0, document.getElementById(id).offsetTop);
 }
@@ -23,9 +14,17 @@ function scrollToElementId(id) {
 var in_pres_mode = false;
 function togglePresentationMode() {
   in_pres_mode = !in_pres_mode;
-  console.log('presentation mode', in_pres_mode ? 'on' : 'off');
-  applyStyle('.S1', 'min-height', in_pres_mode ? '101%' : '0');
-  applyStyle('.S2', 'margin', in_pres_mode ? '101% 0' : '0');
+  for (let sid of paging_ids) {
+    let section = document.getElementById(sid);
+    console.log(sid, section.className);
+    if (section.id == 'body') {
+      // skip; not actually a section.
+    } else if (section.className == 'S1') {
+      section.style['min-height'] = in_pres_mode ? '101%' : '0';
+    } else {
+      section.style['margin'] = in_pres_mode ? '100% 0' : '0';
+    }
+  }
 }
 
 var section_ids = null;

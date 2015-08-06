@@ -14,9 +14,9 @@ a:hover { outline: 0; }
 blockquote {
   border-left-color: #E0E0E0;
   border-left-style: solid;
-  border-left-width: 0.333rem; /* matches width of ul bullets. */
+  border-left-width: 0.333rem;
   margin: 0;
-  padding: 0 0.677rem; /* matches width of ul bullet margin; how can we set that explicitly?. */
+  padding: 0 0.677rem;
 }
 body {
   margin: 1rem;
@@ -76,15 +76,6 @@ ul > ul {
 
 
 js = '''
-function applyStyle(selector, attr, val) {
-  let els = document.querySelectorAll(selector);
-  //for (let el of els) { // does not work as of chrome 44, firefox 39.
-  for (var i = 0; i < els.length; i++) {
-    let el = els[i];
-    el.style[attr] = val;
-  }
-}
-
 function scrollToElementId(id) {
   window.scrollTo(0, document.getElementById(id).offsetTop);
 }
@@ -92,9 +83,17 @@ function scrollToElementId(id) {
 var in_pres_mode = false;
 function togglePresentationMode() {
   in_pres_mode = !in_pres_mode;
-  console.log('presentation mode', in_pres_mode ? 'on' : 'off');
-  applyStyle('.S1', 'min-height', in_pres_mode ? '101%' : '0');
-  applyStyle('.S2', 'margin', in_pres_mode ? '101% 0' : '0');
+  for (let sid of paging_ids) {
+    let section = document.getElementById(sid);
+    console.log(sid, section.className);
+    if (section.id == 'body') {
+      // skip; not actually a section.
+    } else if (section.className == 'S1') {
+      section.style['min-height'] = in_pres_mode ? '101%' : '0';
+    } else {
+      section.style['margin'] = in_pres_mode ? '100% 0' : '0';
+    }
+  }
 }
 
 var section_ids = null;
