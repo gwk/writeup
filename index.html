@@ -1,0 +1,245 @@
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>readme.wu</title>
+  <meta name="description" content="">
+  <meta name="author" content="">
+  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
+  <style type="text/css">a { background-color: transparent; } a:active { outline: 0; } a:hover { outline: 0; } blockquote { border-left-color: #E0E0E0; border-left-style: solid; border-left-width: 0.333rem; margin: 0; padding: 0 0.677rem; } body { margin: 1rem; } body footer { border-top-color: #E8E8E8; border-top-style: solid; border-top-width: 1px; color: #606060; font-size: .875rem; margin: 1rem 0 0 0; } code { background-color: rgba(0, 0, 0, 0.1); border-radius: 3px; font-family: source code pro, menlo, terminal, monospace; } footer { display: block; } h1 { border-top-color: #E8E8E8; border-top-style: solid; border-top-width: 1px; } h1 { font-size: 2.0rem; margin: 1.4rem 0 0.6rem 0; } h2 { font-size: 1.6rem; margin: 1.2rem 0 0.5rem 0; } h3 { font-size: 1.4rem; margin: 1.1rem 0 0.5rem 0; } h4 { font-size: 1.2rem; margin: 1.0rem 0 0.5rem 0; } h5 { font-size: 1.1rem; margin: 1.0rem 0 0.5rem 0; } h6 { font-size: 1.0rem; margin: 1.0rem 0 0.5rem 0; } header { display: block; } html { background: white; color: black; font-family: source sans pro, sans-serif; font-size: 1rem; } section { display: block; } nav { display: block; } p { margin: 0.5rem 0; } pre { background: #F0F0F0; font-family: source code pro, menlo, terminal, monospace; font-size: 1rem; overflow: auto; padding: 0.1rem; } ul { line-height: 1.333rem; list-style-type: none; margin: 0rem; padding: 0rem; } ul > ul { padding-left: 0.667rem; }</style>
+  <script type="text/javascript"> "use strict";
+function applyStyle(selector, attr, val) {
+  let els = document.querySelectorAll(selector);
+  //for (let el of els) { // does not work as of chrome 44, firefox 39.
+  for (var i = 0; i < els.length; i++) {
+    let el = els[i];
+    el.style[attr] = val;
+  }
+}
+
+function scrollToElementId(id) {
+  window.scrollTo(0, document.getElementById(id).offsetTop);
+}
+
+var in_pres_mode = false;
+function togglePresentationMode() {
+  in_pres_mode = !in_pres_mode;
+  console.log('presentation mode', in_pres_mode ? 'on' : 'off');
+  applyStyle('.S1', 'min-height', in_pres_mode ? '101%' : '0');
+  applyStyle('.S2', 'margin', in_pres_mode ? '101% 0' : '0');
+}
+
+var section_ids = null;
+var paging_ids = null;
+var paging_idx = 0;
+
+window.onkeydown = function(e) { 
+  if (e.keyCode === 37) { // left.
+    if (paging_idx > 0) {
+      paging_idx -= 1;
+    }
+    scrollToElementId(paging_ids[paging_idx]);
+  } else if (e.keyCode === 39) { // right.
+    if (paging_idx < paging_ids.length - 1) {
+      paging_idx += 1;
+    }
+    scrollToElementId(paging_ids[paging_idx]);
+  }
+};
+
+window.onkeypress = function(e) {
+  if (e.charCode === 112) { // 'p'.
+    togglePresentationMode();
+  }
+};
+</script>
+</head>
+<body id="body">
+<section class="S1" id="s1">
+  <h1 id="h1">Introduction</h1>
+  <p>
+    Writeup is a text markup format that translates to HTML5. It is similar to Markdown in spirit, but is not equivalent. Some of the differences include:
+  </p>
+  <ul class="L1">
+    <li>• hierarchical sections.</li>
+    <li>• special handling of license lines at the beginning of a file.</li>
+    <li>• the format is designed to make correct implementation simple and unambiguous.</li>
+    <li>• builtin javascript presentation mode.</li>
+  </ul>
+  <section class="S2" id="s1.1">
+    <h2 id="h1.1">License</h2>
+    <p>
+      All of the source code and documentation is dedicated to the public domain under CC0: https://creativecommons.org/.publicdomain/zero/1.0/.
+    </p>
+  </section>
+</section>
+<section class="S1" id="s2">
+  <h1 id="h2">Format</h1>
+  <p>
+    Writeup documents consist of:
+  </p>
+  <ul class="L1">
+    <li>• an initial required version line, e.g.: <code>writeup&nbsp;v0</code>.</li>
+    <li>• optional consecutive copyright/license lines at the beginning of the document, followed by a blank line. Recognized prefixes are:</li>
+    <ul class="L2">
+      <li>• <code>©</code></li>
+      <li>• <code>Copyright</code></li>
+      <li>• <code>Dedicated&nbsp;to&nbsp;the&nbsp;public&nbsp;domain</code></li>
+    </ul>
+    <li>• blank lines, containing only whitespace characters.</li>
+    <li>• header lines, beginning with one or more hash <code>#</code> characters.</li>
+    <li>• list lines, beginning with zero or more pairs of spaces, followed by a dash <code>-</code> character.</li>
+    <li>• code lines, prefixed with <code>|&nbsp;</code>.</li>
+    <li>• quote lines, prefixed with <code>&gt;&nbsp;</code>.</li>
+    <li>• text lines, which are any lines that don't match the above criteria.</li>
+  </ul>
+  <p>
+    These are translated as follows:
+  </p>
+  <ul class="L1">
+    <li>• line breaks are inserted between text lines.</li>
+    <li>• a single blank separates text lines into paragraphs.</li>
+    <li>• blank lines close list, code, and quote blocks.</li>
+    <li>• a header line denotes a section with a header whose numerical level is indicated by the number of hash symbols.</li>
+    <ul class="L2">
+      <li>• sections are translated into nested <code>&lt;section&gt;</code> elements, containing the appropriate <code>&lt;h1&gt;</code> through <code>&lt;h6&gt;</code> header elements.</li>
+      <li>• sections can be nested arbitrarily deeply, but beyond 6 levels will all produce <code>h6</code> tags, the maximum supported by HTML5.</li>
+    </ul>
+  </ul>
+  <section class="S2" id="s2.1">
+    <h2 id="h2.1">Comparison to Markdown</h2>
+    <p>
+      Writeup differs from Github Flavored Markdown (GFD) in the following ways:
+    </p>
+    <ul class="L1">
+      <li>• Writeup headers create a hierarchical structure of <code>&lt;section&gt;</code> blocks in the document; Markdown has a flat structure.</li>
+      <li>• Writeup does not support:</li>
+      <ul class="L2">
+        <li>• italics with <code>*</code>, bold with <code>**</code>, both with <code>_</code>, or strikethrough with <code>~~</code>.</li>
+        <li>• link syntax <code>[http://...](name...)</code>.</li>
+        <li>• ordered lists.</li>
+        <li>• fenced codeblocks with <code>```</code>:</li>
+        <ul class="L3">
+          <li>• redundant with indent blocks, which look cleaner in the source.</li>
+        </ul>
+        <li>• tables.</li>
+      </ul>
+    </ul>
+  </section>
+  <section class="S2" id="s2.2">
+    <h2 id="h2.2">Warnings</h2>
+    <p>
+      Warnings are issued for the following conditions:
+    </p>
+    <ul class="L1">
+      <li>• a blank line is not empty.</li>
+      <li>• the final line does not end with a newline character.</li>
+      <li>• indentation is an odd number of spaces.</li>
+      <li>• indentation consisting of characters other than spaces.</li>
+    </ul>
+  </section>
+</section>
+<section class="S1" id="s3">
+  <h1 id="h3">Versioning</h1>
+  <p>
+    All writeup documents require a version line at the beginning of the document, like this:
+  <br />
+    writeup v0
+  </p>
+  <p>
+    Writeup is currently experimental, and the only version number supported is 0. Once the format appears reasonably stable, then it will be promoted to v1. From then on, if the format changes, then implementations should either recognize and respect or else reject old version numbers.
+  </p>
+  <p>
+    Text snippets submitted to a program can omit the version number; it is the responsibility of the program to track the format version as necessary.
+  </p>
+  <section class="S2" id="s3.1">
+    <h2 id="h3.1">Adoption</h2>
+    <p>
+      If you start using writeup seriously please let me know and I will bump the version number to 1.
+    </p>
+  </section>
+</section>
+<section class="S1" id="s4">
+  <h1 id="h4">Usage</h1>
+  <p>
+    Writeup can take 0, 1 or 2 arguments, defaulting to stdout and stdin as follows:
+  <br />
+    $ writeup.py &lt;in &gt;out
+  <br />
+    $ writeup.py file.wu &gt; out
+  <br />
+    $ writeup.py file.wu file.html
+  </p>
+</section>
+<section class="S1" id="s5">
+  <h1 id="h5">Implementation</h1>
+  <p>
+    Writeup is currently implemented as a python 3.4 script, depending only on the standard library.
+  </p>
+</section>
+<section class="S1" id="s6">
+  <h1 id="h6">Examples</h1>
+  <p>
+    Sections and text:
+  </p>
+<pre>
+# Header 1
+line 1
+- A
+- B
+  - B1
+  - B2
+- C
+## Header 2
+line 2
+Line 3</pre>
+  <p>
+    Becomes:
+  </p>
+  <blockquote>
+    <section class="S1" id="s1">
+      <h1 id="h1">Header 1</h1>
+      <p>
+        line 1
+      </p>
+      <ul class="L1">
+        <li>• A</li>
+        <li>• B</li>
+        <ul class="L2">
+          <li>• B1</li>
+          <li>• B2</li>
+        </ul>
+        <li>• C</li>
+      </ul>
+      <section class="S2" id="s1.1">
+        <h2 id="h1.1">Header 2</h2>
+        <p>
+          line 2
+        <br />
+          Line 3
+        </p>
+      </section>
+    </section>
+    <script type="text/javascript"> "use strict";
+    section_ids = ['s1','s1.1'];
+    paging_ids = ['body', 's1','s1.1'];
+    </script>
+  </blockquote>
+</section>
+<section class="S1" id="s7">
+  <h1 id="h7">Credits</h1>
+  <p>
+    By George King.
+  </p>
+  <p>
+    Shout out to the RZA, the GZA, Method Man, Raekwon, Ghostface Killah, Inspectah Deck, U-God, Masta Killa, Cappadonna, and the Ol' Dirty Bastard.
+  </p>
+</section>
+<footer>
+Dedicated to the public domain under CC0: https://creativecommons.org/publicdomain/zero/1.0/.
+</footer>
+<script type="text/javascript"> "use strict";
+section_ids = ['s1','s1.1','s2','s2.1','s2.2','s3','s3.1','s4','s5','s6','s7'];
+paging_ids = ['body', 's1','s1.1','s2','s2.1','s2.2','s3','s3.1','s4','s5','s6','s7'];
+</script>
+</body>
+</html>
