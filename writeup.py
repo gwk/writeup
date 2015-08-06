@@ -85,15 +85,14 @@ function togglePresentationMode() {
   in_pres_mode = !in_pres_mode;
   for (let sid of paging_ids) {
     let section = document.getElementById(sid);
-    console.log(sid, section.className);
     if (section.id == 'body') {
       // skip; not actually a section.
-    } else if (section.className == 'S1') {
-      section.style['min-height'] = in_pres_mode ? '101%' : '0';
     } else {
-      section.style['margin'] = in_pres_mode ? '100% 0' : '0';
+      section.style['margin'] = in_pres_mode ? '100vh 0 0 0' : '0';
     }
   }
+  let footer = document.getElementById('footer');
+  footer.style['margin'] = in_pres_mode ? '100vh 0 0 0' : '0';
 }
 
 var section_ids = null;
@@ -384,7 +383,7 @@ def writeup_body(out_lines, in_lines, line_offset):
       for i in range(section_depth, 0, -1):
         out(i - 1, '</section>')
       if license_lines:
-        out(0, '<footer>\n', '<br />\n'.join(license_lines), '\n</footer>')
+        out(0, '<footer id="footer">\n', '<br />\n'.join(license_lines), '\n</footer>')
 
     else:
       error('bad state: {}', state)
