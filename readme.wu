@@ -8,6 +8,7 @@ Writeup is a text markup format that translates to HTML5. It is similar to Markd
 - hierarchical sections.
 - special handling of license lines at the beginning of a file.
 - the format is designed to make correct implementation simple and unambiguous.
+- builtin javascript presentation mode.
 
 ## License
 All of the source code and documentation is dedicated to the public domain under CC0: https://creativecommons.org/.publicdomain/zero/1.0/.

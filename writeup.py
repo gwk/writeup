@@ -22,9 +22,12 @@ body {
   margin: 1rem;
   }
 body footer {
-  margin: 1rem 0 0 0;
-  font-size: .875rem;
+  border-top-color: #E8E8E8;
+  border-top-style: solid;
+  border-top-width: 1px;
   color: #606060;
+  font-size: .875rem;
+  margin: 1rem 0 0 0;
 }
 code {
   background-color: rgba(0, 0, 0, 0.1);
@@ -71,38 +74,53 @@ ul > ul {
 }
 '''
 
-presentation_css = '''
-.S1 {
-  min-height: 100%;
-}
-'''
 
 js = '''
-"use strict";
+function applyStyle(selector, attr, val) {
+  let els = document.querySelectorAll(selector);
+  //for (let el of els) { // does not work as of chrome 44, firefox 39.
+  for (var i = 0; i < els.length; i++) {
+    let el = els[i];
+    el.style[attr] = val;
+  }
+}
 
 function scrollToElementId(id) {
   window.scrollTo(0, document.getElementById(id).offsetTop);
 }
 
-var current_section_idx = 0;
+var in_pres_mode = false;
+function togglePresentationMode() {
+  in_pres_mode = !in_pres_mode;
+  console.log('presentation mode', in_pres_mode ? 'on' : 'off');
+  applyStyle('.S1', 'min-height', in_pres_mode ? '101%' : '0');
+  applyStyle('.S2', 'margin', in_pres_mode ? '101% 0' : '0');
+}
+
+var section_ids = null;
+var paging_ids = null;
+var paging_idx = 0;
 
 window.onkeydown = function(e) { 
   if (e.keyCode === 37) { // left.
-    if (current_section_idx > 0) {
-      current_section_idx -= 1;
-      scrollToElementId(section_ids[current_section_idx]);
+    if (paging_idx > 0) {
+      paging_idx -= 1;
     }
+    scrollToElementId(paging_ids[paging_idx]);
   } else if (e.keyCode === 39) { // right.
-    if (current_section_idx < section_ids.length - 1) {
-      current_section_idx += 1;
-      scrollToElementId(section_ids[current_section_idx]);
+    if (paging_idx < paging_ids.length - 1) {
+      paging_idx += 1;
     }
+    scrollToElementId(paging_ids[paging_idx]);
+  }
+};
+
+window.onkeypress = function(e) {
+  if (e.charCode === 112) { // 'p'.
+    togglePresentationMode();
   }
 };
 '''
-
-# onclick=esc_attr('return scrollToSection("{}")'.format(next_sid)
-# '<... onclick="{onclick}">'.format(onclick=onclick)
 
 
 # version pattern is applied to the first line of documents;
@@ -216,6 +234,7 @@ def writeup_body(out_lines, in_lines, line_offset):
 
   # state variables used by writeup_line.
   section_ids = [] # accumulated list of all section ids.
+  paging_ids = [] # accumulated list of all paging (level 1 & 2) section ids.
   section_stack = [] # stack of currently open sections.
   list_depth = 0 # currently open list depth.
   license_lines = []
@@ -317,7 +336,9 @@ def writeup_body(out_lines, in_lines, line_offset):
         prev_index = 0
       # current.
       out(depth, '<h{} id="h{}">{}</h{}>'.format(h_num, sid, convert_inline_text(text), h_num))
-      section_ids.append('s' + sid)
+      section_ids.append(sid)
+      if depth <= 2:
+        paging_ids.append(sid)
 
     elif state == s_list:
       indents, spaces, text = groups
@@ -364,7 +385,7 @@ def writeup_body(out_lines, in_lines, line_offset):
       for i in range(section_depth, 0, -1):
         out(i - 1, '</section>')
       if license_lines:
-        out(0, '<footer>\n', '<br />'.join(license_lines), '\n</footer>')
+        out(0, '<footer>\n', '<br />\n'.join(license_lines), '\n</footer>')
 
     else:
       error('bad state: {}', state)
@@ -400,12 +421,9 @@ def writeup_body(out_lines, in_lines, line_offset):
   writeup_line(line_num + 1, '\n', prev_state, s_end, None)
 
   # generate tables.
-  out(0, '<script>')
-  out(0, 'section_ids = [')
-  out(1, '"body",')
-  for sid in section_ids:
-    out(1, '"{}",'.format(sid))
-  out(0, '];')
+  out(0, '<script type="text/javascript"> "use strict";')
+  out(0, 'section_ids = [{}];'.format(','.join("'s{}'".format(sid) for sid in section_ids)))
+  out(0, "paging_ids = ['body', {}];".format(','.join("'s{}'".format(sid) for sid in paging_ids)))
   out(0, '</script>')
 
 
@@ -421,7 +439,7 @@ def writeup(in_lines, line_offset, title, description, author, css, js):
   <meta name="author" content="{author}">
   <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
   <style type="text/css">{css}</style>
-  <script>{js}</script>
+  <script type="text/javascript"> "use strict";{js}</script>
 </head>
 <body id="body">\
 '''.format(title=title, description=description, author=author, css=css, js=js)]
@@ -435,7 +453,6 @@ def writeup(in_lines, line_offset, title, description, author, css, js):
 if __name__ == '__main__':
   
   arg_parser = argparse.ArgumentParser(description='convert .wu files to html')
-  arg_parser.add_argument('-presentation', action='store_true', help='add presentation mode css')
   arg_parser.add_argument('src_path', nargs='?', help='input .wu source path (defaults to stdin)')
   arg_parser.add_argument('dst_path', nargs='?', help='output .html path (defaults to stdout)')
 
@@ -446,7 +463,7 @@ if __name__ == '__main__':
   check(args.dst_path or args.dst_path is None, 'dst_path cannot be empty string')
 
   f_in  = open(args.src_path) if args.src_path else sys.stdin
-  f_out = open(args.dst_path) if args.dst_path else sys.stdout
+  f_out = open(args.dst_path, 'w') if args.dst_path else sys.stdout
 
   # version.
   version_line = f_in.readline()
@@ -457,8 +474,6 @@ if __name__ == '__main__':
   check(version == 0, 'unsupported version number: {}', version)
 
   # css.
-  if args.presentation:
-    css += presentation_css
   css = minify_css(css)
 
   html_lines = writeup(f_in,
