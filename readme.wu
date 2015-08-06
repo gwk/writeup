@@ -4,11 +4,12 @@ Dedicated to the public domain under CC0: https://creativecommons.org/publicdoma
 
 # Introduction
 
-Writeup is a text markup format that translates to HTML5. It is similar to Markdown in spirit, but is not equivalent. Some of the differences include:
+Writeup is a text markup format that translates to HTML5. It is similar to Markdown in spirit, but is not equivalent. Some differences:
+- the line-oriented syntax is designed to make correct implementation simple and unambiguous.
 - hierarchical sections.
 - special handling of license lines at the beginning of a file.
-- the format is designed to make correct implementation simple and unambiguous.
 - builtin javascript presentation mode.
+- unambiguous character escape syntaxes.
 
 ## License
 All of the source code and documentation is dedicated to the public domain under CC0: https://creativecommons.org/.publicdomain/zero/1.0/.
@@ -37,16 +38,25 @@ These are translated as follows:
   - sections are translated into nested `<section>` elements, containing the appropriate `<h1>` through `<h6>` header elements.
   - sections can be nested arbitrarily deeply, but beyond 6 levels will all produce `h6` tags, the maximum supported by HTML5.
 
+There is also support for inline markup:
+- currently only `\`…\`` code markup is implemented.
+- additional markup elements can be added easily:
+  - link syntax (high priority).
+  - italics, bold, strikethrough, additions and deletions, etc.
+
 ## Comparison to Markdown
-Writeup differs from Github Flavored Markdown (GFD) in the following ways:
+Writeup differs from Github Flavored Markdown (GFD) substantially; here are some of the more obvious points:
 - Writeup headers create a hierarchical structure of `<section>` blocks in the document; Markdown has a flat structure.
+- the output HTML contains CSS, javascript, and class attributes in order to stand alone; the Github markup system specifically strips this out of documents.
 - Writeup does not support:
   - italics with `*`, bold with `**`, both with `_`, or strikethrough with `~~`.
   - link syntax `[http://...](name...)`.
   - ordered lists.
-  - fenced codeblocks with `\`\`\``:
-    - redundant with indent blocks, which look cleaner in the source.
+  - fenced codeblocks with `\`\`\``; this is redundant with writeup's `|` code blocks.
+  - syntax highlighting (maybe one day…).
   - tables.
+  - task lists.
+  - domain-specific features like @mentions.
 
 ## Warnings
 Warnings are issued for the following conditions:
@@ -72,9 +82,18 @@ If you start using writeup seriously please let me know and I will bump the vers
 # Usage
 
 Writeup can take 0, 1 or 2 arguments, defaulting to stdout and stdin as follows:
-  $ writeup.py <in >out
-  $ writeup.py file.wu > out
-  $ writeup.py file.wu file.html
+| $ writeup.py <in >out
+| $ writeup.py file.wu > out
+| $ writeup.py file.wu file.html
+
+## Paging
+Writeup HTML contains javascript that facilitates jumping paging across primary and secondary sections using the left and right arrow keys.
+
+## Presentation Mode
+Writeup HTML files contain css and javascript for both normal and presentation modes. Press `p` in the browser to toggle between modes. Presentation mode simply adds styling to the primary and secondary sections to make them the full window height; in conjunction with the paging mechanism this serves as a simple presentation mechanism.
+
+## List Bullets
+Writeup currently takes an unconventional approach to list styling: list bullets are disabled in the CSS, and instead bullet characters are inserted into the list item text. This is done so that copying a section of text from the browser retains the bullets (indentation is still lost). It is an experiment, and feedback is welcome.
 
 
 # Implementation
