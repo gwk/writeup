@@ -82,9 +82,9 @@ If you start using writeup seriously please let me know and I will bump the vers
 # Usage
 
 Writeup can take 0, 1 or 2 arguments, defaulting to stdout and stdin as follows:
-| $ writeup.py <in >out
-| $ writeup.py file.wu > out
-| $ writeup.py file.wu file.html
+| $ ./writeup.py <in >out
+| $ ./writeup.py file.wu > out
+| $ ./writeup.py file.wu file.html
 
 ## Paging
 Writeup HTML contains javascript that facilitates jumping paging across primary and secondary sections using the left and right arrow keys.
@@ -126,6 +126,7 @@ Becomes:
 > ## Header 2
 > line 2
 > Line 3
+
 
 # Credits
 
