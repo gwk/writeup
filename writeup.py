@@ -132,6 +132,7 @@ license_re = re.compile(r'(©|Copyright|Dedicated to the public domain).*\n')
 # line states.
 s_start, s_license, s_section, s_list, s_quote, s_code, s_blank, s_text, s_end = range(9)
 
+# for debug output only.
 state_letters = '_©SLQCBTE'
 
 matchers = [
@@ -173,10 +174,10 @@ def minify_css(src):
   return ' '.join(chunks) # use empty string joiner for more aggressive minification.
 
 
-def esc(text):
+def html_esc(text):
   return html.escape(text, quote=False)
 
-def esc_attr(text):
+def html_esc_attr(text):
   return html.escape(text, quote=True)
 
 
@@ -185,47 +186,81 @@ def esc_attr(text):
 # general pattern for quoting with escapes is Q([^EQ]|EQ|EE)*Q.
 # it is crucial that the escape character E is excluded in the '[^EQ]' clause,
 # or else when matching against 'QEQQ', the pattern greedily matches 'QEQ'.
-# to enable all inputs, the 'EE' clause is also required.
+# to allow a trailing escape character, the 'EE' clause is also required.
+span_char_esc_fn = lambda m: m.group(0)[1:] # strip leading '\' escape.
 
-inline_code_pat = r'`(?:[^\\`]|\\`|\\\\)*`' # for splitting line.
-inline_code_esc_re = re.compile(r'\\`|\\\\') # for escaping quoted code string.
-inline_code_esc_fn = lambda m: m.group(0)[1:] # strip leading escape.
+# backtick code span.
 
-def inline_code_conv(text):
-  text_inner = text[1:-1] # remove surrounding backquotes.
-  text_escaped = inline_code_esc_re.sub(inline_code_esc_fn, text_inner)
-  text_escaped1 = esc(text_escaped)
-  text_spaced = text_escaped1.replace(' ', '&nbsp;')
+span_code_pat = r'`((?:[^\\`]|\\`|\\\\)*)`' # finds code spans.
+span_code_esc_re = re.compile(r'\\`|\\\\') # escapes code strings.
+
+def span_code_conv(text, error, options):
+  'convert backtick code span to html.'
+  text_escaped = span_code_esc_re.sub(span_char_esc_fn, text)
+  text_escaped_html = html_esc(text_escaped)
+  text_spaced = text_escaped_html.replace(' ', '&nbsp;')
   return '<code>{}</code>'.format(text_spaced)
 
-# pattern and associated handler.
-inline_elements = [
-  (inline_code_pat, inline_code_conv)
+# generic angle bracket spans.
+
+span_pat = r'<((?:[^\\>]|\\>|\\\\)*)>'
+span_esc_re = re.compile(r'\\>|\\\\') # escapes span strings.
+
+
+def span_embed(text, error, options):
+  'convert an embed span into html.'
+  if options['print_dependencies']:
+    print(text)
+  with open(text) as f:
+    return f.read()
+
+
+span_dispatch = {
+  'embed' : span_embed
+}
+
+def span_conv(text, error, options):
+  'convert generic angle bracket span to html.'
+  tag, colon, body = text.partition(':')
+  if colon is None: error('malformed span is missing colon after tag: `{}`'.format(text))
+  try:
+    f = span_dispatch[tag]
+  except KeyError:
+    error('malformed span has invalid tag: `{}`'.format(tag))
+  return f(body.strip(), error, options)
+
+
+# span patterns and associated handlers.
+span_kinds = [
+  (span_code_pat, span_code_conv),
+  (span_pat, span_conv),
 ]
 
-# wrap each sub-pattern in capturing parentheses.
-inline_split_re = re.compile('|'.join('({})'.format(p) for p, f in inline_elements))
+# single re, wrapping each span sub-pattern in capturing parentheses.
+span_re = re.compile('|'.join(p for p, f in span_kinds))
 
-def convert_inline_text(text):
+def convert_text(text, error, options):
+  'convert writeup span elements in a text string to html.'
   converted = []
   prev_idx = 0
-  for m in inline_split_re.finditer(text):
+  for m in span_re.finditer(text):
     start_idx = m.start()
     if prev_idx < start_idx: # flush preceding text.
-      converted.append(esc(text[prev_idx:start_idx]))
+      converted.append(html_esc(text[prev_idx:start_idx]))
     prev_idx = m.end()
-    for i, (p, f) in enumerate(inline_elements, 1): # groups are 1-indexed.
-      g = m.group(i)
-      if g is not None:
-        converted.append(f(g))
+    for i, (pattern, fn) in enumerate(span_kinds, 1): # groups are 1-indexed.
+      group = m.group(i)
+      if group is not None:
+        converted.append(fn(group, error, options))
         break
   if prev_idx < len(text):
-    converted.append(esc(text[prev_idx:]))
+    converted.append(html_esc(text[prev_idx:]))
   return ''.join(converted)
 
 
-def writeup_body(out_lines, in_lines, line_offset):
+def writeup_body(out_lines, in_lines, line_offset, options):
   'from input writeup lines, output html lines.'
+
   def out(depth, *items):
     s = ' ' * (depth * 2) + ''.join(items)
     out_lines.append(s)
@@ -270,6 +305,7 @@ def writeup_body(out_lines, in_lines, line_offset):
       return True
 
     # transition.
+
     if prev_state == s_start:
       pass
     elif prev_state == s_license:
@@ -295,7 +331,7 @@ def writeup_body(out_lines, in_lines, line_offset):
       if state != s_quote:
         out(section_depth, '<blockquote>')
         quoted_lines = []
-        writeup_body(quoted_lines, quote_lines, quote_line_num)
+        writeup_body(quoted_lines, quote_lines, quote_line_num, options)
         for ql in quoted_lines:
           out(section_depth + 1, ql)
         out(section_depth, '</blockquote>')
@@ -333,7 +369,7 @@ def writeup_body(out_lines, in_lines, line_offset):
         out(d - 1, '<section class="S{}" id="s{}">'.format(d, sid))
         prev_index = 0
       # current.
-      out(depth, '<h{} id="h{}">{}</h{}>'.format(h_num, sid, convert_inline_text(text), h_num))
+      out(depth, '<h{} id="h{}">{}</h{}>'.format(h_num, sid, convert_text(text, error, options), h_num))
       section_ids.append(sid)
       if depth <= 2:
         paging_ids.append(sid)
@@ -352,12 +388,12 @@ def writeup_body(out_lines, in_lines, line_offset):
         out(section_depth + i, '<ul class="L{}">'.format(i + 1))
       # note: the bullet is inserted as part of the text,
       # so that a user select-and-copy preserves the bullet (indentation is still lost).
-      out(section_depth + depth, '<li>• {}</li>'.format(convert_inline_text(text)))
+      out(section_depth + depth, '<li>• {}</li>'.format(convert_text(text, error, options)))
       list_depth = depth
 
     elif state == s_code:
       text, = groups
-      pre_lines.append(esc(text))
+      pre_lines.append(html_esc(text))
 
     elif state == s_quote:
       quoted_line, = groups
@@ -377,7 +413,7 @@ def writeup_body(out_lines, in_lines, line_offset):
       text = line.strip()
       if prev_state != s_text:
         out(section_depth, '<p>')
-      out(section_depth + 1, convert_inline_text(text))
+      out(section_depth + 1, convert_text(text, error, options))
 
     elif state == s_end:
       for i in range(section_depth, 0, -1):
@@ -425,7 +461,7 @@ def writeup_body(out_lines, in_lines, line_offset):
   out(0, '</script>')
 
 
-def writeup(in_lines, line_offset, title, description, author, css, js):
+def writeup(in_lines, line_offset, title, description, author, css, js, options):
   'generate a complete html document from a writeup file (or stream of lines).'
 
   html_lines = ['''\
@@ -442,7 +478,7 @@ def writeup(in_lines, line_offset, title, description, author, css, js):
 <body id="body">\
 '''.format(title=title, description=description, author=author, css=css, js=js)]
 
-  writeup_body(html_lines, in_lines, line_offset)
+  writeup_body(html_lines, in_lines, line_offset, options)
 
   html_lines.append('</body>\n</html>')
   return html_lines
@@ -453,8 +489,12 @@ if __name__ == '__main__':
   arg_parser = argparse.ArgumentParser(description='convert .wu files to html')
   arg_parser.add_argument('src_path', nargs='?', help='input .wu source path (defaults to stdin)')
   arg_parser.add_argument('dst_path', nargs='?', help='output .html path (defaults to stdout)')
-
+  arg_parser.add_argument('-print-dependencies', action='store_true')
   args = arg_parser.parse_args()
+
+  options = {
+    'print_dependencies': args.print_dependencies
+  }
 
   # paths.
   check(args.src_path or args.src_path is None, 'src_path cannot be empty string')
@@ -480,8 +520,10 @@ if __name__ == '__main__':
     description='',
     author='',
     css=css,
-    js=js)
+    js=js,
+    options=options)
 
-  for line in html_lines:
-    print(line, file=f_out)
+  if not options['print_dependencies']:
+    for line in html_lines:
+      print(line, file=f_out)
 
