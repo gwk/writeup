@@ -83,15 +83,15 @@ function scrollToElementId(id) {
 var in_pres_mode = false;
 function togglePresentationMode() {
   in_pres_mode = !in_pres_mode;
-  for (let sid of paging_ids) {
-    let section = document.getElementById(sid);
+  for (var sid of paging_ids) {
+    var section = document.getElementById(sid);
     if (section.id == 'body') {
       // skip; not actually a section.
     } else {
       section.style['margin'] = in_pres_mode ? '100vh 0 0 0' : '0';
     }
   }
-  let footer = document.getElementById('footer');
+  var footer = document.getElementById('footer');
   footer.style['margin'] = in_pres_mode ? '100vh 0 0 0' : '0';
 }
 
