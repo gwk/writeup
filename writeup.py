@@ -5,6 +5,7 @@ import argparse
 import html
 import re
 import sys
+import os.path
 
 
 css = '''
@@ -181,6 +182,14 @@ def html_esc_attr(text):
   return html.escape(text, quote=True)
 
 
+class Ctx:
+  def __init__(self, src_name, error, dependencies: list):
+    self.src_name = src_name
+    self.src_dir = os.path.dirname(src_name) or '.'
+    self.error = error # error function.
+    self.dependencies = dependencies
+    self.emit_dependencies = dependencies != None
+
 # inline span handling.
 
 # general pattern for quoting with escapes is Q([^EQ]|EQ|EE)*Q.
@@ -194,7 +203,7 @@ span_char_esc_fn = lambda m: m.group(0)[1:] # strip leading '\' escape.
 span_code_pat = r'`((?:[^\\`]|\\`|\\\\)*)`' # finds code spans.
 span_code_esc_re = re.compile(r'\\`|\\\\') # escapes code strings.
 
-def span_code_conv(text, error, options):
+def span_code_conv(text, ctx):
   'convert backtick code span to html.'
   text_escaped = span_code_esc_re.sub(span_char_esc_fn, text)
   text_escaped_html = html_esc(text_escaped)
@@ -207,27 +216,30 @@ span_pat = r'<((?:[^\\>]|\\>|\\\\)*)>'
 span_esc_re = re.compile(r'\\>|\\\\') # escapes span strings.
 
 
-def span_embed(text, error, options):
+def span_embed(text, ctx):
   'convert an embed span into html.'
-  if options['print_dependencies']:
-    print(text)
-  with open(text) as f:
-    return f.read()
-
+  if ctx.emit_dependencies:
+    ctx.dependencies.append(text)
+    return ''
+  try:
+    with open(os.path.join(ctx.src_dir, text)) as f:
+      return f.read()
+  except FileNotFoundError:
+    ctx.error('embedded file not found: {}', text)
 
 span_dispatch = {
   'embed' : span_embed
 }
 
-def span_conv(text, error, options):
+def span_conv(text, ctx):
   'convert generic angle bracket span to html.'
   tag, colon, body = text.partition(':')
   if colon is None: error('malformed span is missing colon after tag: `{}`'.format(text))
   try:
     f = span_dispatch[tag]
   except KeyError:
-    error('malformed span has invalid tag: `{}`'.format(tag))
-  return f(body.strip(), error, options)
+    ctx.error('malformed span has invalid tag: `{}`'.format(tag))
+  return f(body.strip(), ctx)
 
 
 # span patterns and associated handlers.
@@ -239,7 +251,7 @@ span_kinds = [
 # single re, wrapping each span sub-pattern in capturing parentheses.
 span_re = re.compile('|'.join(p for p, f in span_kinds))
 
-def convert_text(text, error, options):
+def convert_text(text, ctx):
   'convert writeup span elements in a text string to html.'
   converted = []
   prev_idx = 0
@@ -251,15 +263,15 @@ def convert_text(text, error, options):
     for i, (pattern, fn) in enumerate(span_kinds, 1): # groups are 1-indexed.
       group = m.group(i)
       if group is not None:
-        converted.append(fn(group, error, options))
+        converted.append(fn(group, ctx))
         break
   if prev_idx < len(text):
     converted.append(html_esc(text[prev_idx:]))
   return ''.join(converted)
 
 
-def writeup_body(out_lines, in_lines, line_offset, options):
-  'from input writeup lines, output html lines.'
+def writeup_body(out_dependencies, out_lines, in_lines, line_offset, src_name):
+  'from input writeup lines, output html lines and dependencies.'
 
   def out(depth, *items):
     s = ' ' * (depth * 2) + ''.join(items)
@@ -286,11 +298,13 @@ def writeup_body(out_lines, in_lines, line_offset, options):
     #errF('{:03} {}{}: {}', line_num, state_letters[prev_state], state_letters[state], line)
 
     def warn(fmt, *items):
-      errFL('warning: line {}: ' + fmt, line_num, *items)
+      errFL('writeup warning: {}: line {}: ' + fmt, src_name, line_num, *items)
       errFL("  '{}'", repr(line))
 
     def error(fmt, *items):
-      fail('error: line {}: ' + fmt, line_num, *items)
+      fail('writeup error: {}: line {}: ' + fmt, src_name, line_num, *items)
+
+    ctx = Ctx(src_name, error, out_dependencies)
 
     def check_whitespace(len_exp, string, msg_suffix=''):
       for i, c in enumerate(string):
@@ -331,7 +345,7 @@ def writeup_body(out_lines, in_lines, line_offset, options):
       if state != s_quote:
         out(section_depth, '<blockquote>')
         quoted_lines = []
-        writeup_body(quoted_lines, quote_lines, quote_line_num, options)
+        writeup_body(out_dependencies, quoted_lines, quote_lines, quote_line_num, src_name)
         for ql in quoted_lines:
           out(section_depth + 1, ql)
         out(section_depth, '</blockquote>')
@@ -369,7 +383,7 @@ def writeup_body(out_lines, in_lines, line_offset, options):
         out(d - 1, '<section class="S{}" id="s{}">'.format(d, sid))
         prev_index = 0
       # current.
-      out(depth, '<h{} id="h{}">{}</h{}>'.format(h_num, sid, convert_text(text, error, options), h_num))
+      out(depth, '<h{} id="h{}">{}</h{}>'.format(h_num, sid, convert_text(text, ctx), h_num))
       section_ids.append(sid)
       if depth <= 2:
         paging_ids.append(sid)
@@ -388,7 +402,7 @@ def writeup_body(out_lines, in_lines, line_offset, options):
         out(section_depth + i, '<ul class="L{}">'.format(i + 1))
       # note: the bullet is inserted as part of the text,
       # so that a user select-and-copy preserves the bullet (indentation is still lost).
-      out(section_depth + depth, '<li>• {}</li>'.format(convert_text(text, error, options)))
+      out(section_depth + depth, '<li>• {}</li>'.format(convert_text(text, ctx)))
       list_depth = depth
 
     elif state == s_code:
@@ -413,7 +427,7 @@ def writeup_body(out_lines, in_lines, line_offset, options):
       text = line.strip()
       if prev_state != s_text:
         out(section_depth, '<p>')
-      out(section_depth + 1, convert_text(text, error, options))
+      out(section_depth + 1, convert_text(text, ctx))
 
     elif state == s_end:
       for i in range(section_depth, 0, -1):
@@ -461,7 +475,7 @@ def writeup_body(out_lines, in_lines, line_offset, options):
   out(0, '</script>')
 
 
-def writeup(in_lines, line_offset, title, description, author, css, js, options):
+def writeup(in_lines, line_offset, src_name, title, description, author, css, js, print_dependencies):
   'generate a complete html document from a writeup file (or stream of lines).'
 
   html_lines = ['''\
@@ -478,10 +492,15 @@ def writeup(in_lines, line_offset, title, description, author, css, js, options)
 <body id="body">\
 '''.format(title=title, description=description, author=author, css=css, js=js)]
 
-  writeup_body(html_lines, in_lines, line_offset, options)
-
+  dependencies = [] if print_dependencies else None
+  writeup_body(
+    out_dependencies=dependencies,
+    out_lines=html_lines,
+    in_lines=in_lines,
+    line_offset=line_offset,
+    src_name=src_name)
   html_lines.append('</body>\n</html>')
-  return html_lines
+  return (html_lines, dependencies)
 
 
 if __name__ == '__main__':
@@ -491,10 +510,6 @@ if __name__ == '__main__':
   arg_parser.add_argument('dst_path', nargs='?', help='output .html path (defaults to stdout)')
   arg_parser.add_argument('-print-dependencies', action='store_true')
   args = arg_parser.parse_args()
-
-  options = {
-    'print_dependencies': args.print_dependencies
-  }
 
   # paths.
   check(args.src_path or args.src_path is None, 'src_path cannot be empty string')
@@ -514,16 +529,21 @@ if __name__ == '__main__':
   # css.
   css = minify_css(css)
 
-  html_lines = writeup(f_in,
+  src_name = (args.src_path or '(stdin)')
+  (html_lines, dependencies) = writeup(f_in,
+    src_name=src_name,
     line_offset=(1 + 1), # 1-indexed, account for version line.
-    title=(args.src_path or 'stdin'),
+    title=src_name, # TODO.
     description='',
     author='',
     css=css,
     js=js,
-    options=options)
+    print_dependencies=args.print_dependencies)
 
-  if not options['print_dependencies']:
+  if args.print_dependencies:
+    for dep in dependencies:
+      print(dep, file=f_out)
+  else:
     for line in html_lines:
       print(line, file=f_out)
 
