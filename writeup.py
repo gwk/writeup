@@ -188,7 +188,7 @@ class Ctx:
     self.src_dir = os.path.dirname(src_name) or '.'
     self.error = error # error function.
     self.dependencies = dependencies
-    self.emit_dependencies = dependencies != None
+    self.emit_dependencies = (dependencies != None)
 
 # inline span handling.
 
@@ -270,7 +270,7 @@ def convert_text(text, ctx):
   return ''.join(converted)
 
 
-def writeup_body(out_dependencies, out_lines, in_lines, line_offset, src_name):
+def writeup_body(out_dependencies, out_lines, in_lines, line_offset, src_name, is_versioned):
   'from input writeup lines, output html lines and dependencies.'
 
   def out(depth, *items):
@@ -345,7 +345,7 @@ def writeup_body(out_dependencies, out_lines, in_lines, line_offset, src_name):
       if state != s_quote:
         out(section_depth, '<blockquote>')
         quoted_lines = []
-        writeup_body(out_dependencies, quoted_lines, quote_lines, quote_line_num, src_name)
+        writeup_body(out_dependencies, quoted_lines, quote_lines, quote_line_num, src_name, false)
         for ql in quoted_lines:
           out(section_depth + 1, ql)
         out(section_depth, '</blockquote>')
@@ -438,6 +438,13 @@ def writeup_body(out_dependencies, out_lines, in_lines, line_offset, src_name):
     else:
       error('bad state: {}', state)
 
+  if is_versioned:
+    version_line = next(in_lines)
+    m = version_re.fullmatch(version_line)
+    check(m, 'first line must specify writeup version matching pattern: {!r}\nfound: {!r}',
+      version_pattern, version_line)
+    version = int(m.group(1))
+    check(version == 0, 'unsupported version number: {}', version)
 
   prev_state = s_start
   for line_num, line in enumerate(in_lines):
@@ -475,7 +482,7 @@ def writeup_body(out_dependencies, out_lines, in_lines, line_offset, src_name):
   out(0, '</script>')
 
 
-def writeup(in_lines, line_offset, src_name, title, description, author, css, js, print_dependencies):
+def writeup(in_lines, line_offset, src_name, title, description, author, css, js):
   'generate a complete html document from a writeup file (or stream of lines).'
 
   html_lines = ['''\
@@ -492,15 +499,27 @@ def writeup(in_lines, line_offset, src_name, title, description, author, css, js
 <body id="body">\
 '''.format(title=title, description=description, author=author, css=css, js=js)]
 
-  dependencies = [] if print_dependencies else None
   writeup_body(
-    out_dependencies=dependencies,
+    out_dependencies=None,
     out_lines=html_lines,
     in_lines=in_lines,
     line_offset=line_offset,
-    src_name=src_name)
+    src_name=src_name,
+    is_versioned=True)
   html_lines.append('</body>\n</html>')
-  return (html_lines, dependencies)
+  return html_lines
+
+
+def writeup_dependencies(in_lines, line_offset, src_name):
+  dependencies = []
+  writeup_body(
+    out_dependencies=dependencies,
+    out_lines=[],
+    in_lines=in_lines,
+    line_offset=line_offset,
+    src_name=src_name,
+    is_versioned=True)
+  return dependencies
 
 
 if __name__ == '__main__':
@@ -517,33 +536,28 @@ if __name__ == '__main__':
 
   f_in  = open(args.src_path) if args.src_path else sys.stdin
   f_out = open(args.dst_path, 'w') if args.dst_path else sys.stdout
-
-  # version.
-  version_line = f_in.readline()
-  m = version_re.fullmatch(version_line)
-  check(m, 'first line must specify writeup version matching pattern: {!r}\nfound: {!r}',
-    version_pattern, version_line)
-  version = int(m.group(1))
-  check(version == 0, 'unsupported version number: {}', version)
+  in_lines = iter(f_in)
 
   # css.
   css = minify_css(css)
 
   src_name = (args.src_path or '(stdin)')
-  (html_lines, dependencies) = writeup(f_in,
-    src_name=src_name,
-    line_offset=(1 + 1), # 1-indexed, account for version line.
-    title=src_name, # TODO.
-    description='',
-    author='',
-    css=css,
-    js=js,
-    print_dependencies=args.print_dependencies)
 
   if args.print_dependencies:
+    dependencies = writeup_dependencies(in_lines,
+      line_offset=1,
+      src_name=src_name)
     for dep in dependencies:
       print(dep, file=f_out)
   else:
+    html_lines = writeup(in_lines,
+      line_offset=1,
+      src_name=src_name,
+      title=src_name, # TODO.
+      description='',
+      author='',
+      css=css,
+      js=js)
     for line in html_lines:
       print(line, file=f_out)
 
