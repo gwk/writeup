@@ -270,7 +270,8 @@ def convert_text(text, ctx):
   return ''.join(converted)
 
 
-def writeup_body(out_dependencies, out_lines, in_lines, line_offset, src_name, is_versioned):
+def writeup_body(out_lines, out_dependencies, src_name, src_lines,
+  line_offset=0, is_versioned=True):
   'from input writeup lines, output html lines and dependencies.'
 
   def out(depth, *items):
@@ -298,11 +299,11 @@ def writeup_body(out_dependencies, out_lines, in_lines, line_offset, src_name, i
     #errF('{:03} {}{}: {}', line_num, state_letters[prev_state], state_letters[state], line)
 
     def warn(fmt, *items):
-      errFL('writeup warning: {}: line {}: ' + fmt, src_name, line_num, *items)
+      errFL('writeup warning: {}: line {}: ' + fmt, src_name, line_num + 1, *items)
       errFL("  '{}'", repr(line))
 
     def error(fmt, *items):
-      fail('writeup error: {}: line {}: ' + fmt, src_name, line_num, *items)
+      fail('writeup error: {}: line {}: ' + fmt, src_name, line_num + 1, *items)
 
     ctx = Ctx(src_name, error, out_dependencies)
 
@@ -345,7 +346,13 @@ def writeup_body(out_dependencies, out_lines, in_lines, line_offset, src_name, i
       if state != s_quote:
         out(section_depth, '<blockquote>')
         quoted_lines = []
-        writeup_body(out_dependencies, quoted_lines, quote_lines, quote_line_num, src_name, false)
+        writeup_body(
+          out_lines=quoted_lines,
+          out_dependencies=out_dependencies,
+          src_name=src_name,
+          src_lines=quote_lines,
+          line_offset=quote_line_num,
+          is_versioned=False)
         for ql in quoted_lines:
           out(section_depth + 1, ql)
         out(section_depth, '</blockquote>')
@@ -439,15 +446,16 @@ def writeup_body(out_dependencies, out_lines, in_lines, line_offset, src_name, i
       error('bad state: {}', state)
 
   if is_versioned:
-    version_line = next(in_lines)
+    version_line = next(src_lines)
     m = version_re.fullmatch(version_line)
     check(m, 'first line must specify writeup version matching pattern: {!r}\nfound: {!r}',
       version_pattern, version_line)
     version = int(m.group(1))
     check(version == 0, 'unsupported version number: {}', version)
+    line_offset += 1
 
   prev_state = s_start
-  for line_num, line in enumerate(in_lines):
+  for line_num, line in enumerate(src_lines, line_offset):
     # any license notice at top gets moved to a footer at the bottom of the html.
     if prev_state == s_start and license_re.fullmatch(line):
       license_lines.append(line.strip())
@@ -469,7 +477,7 @@ def writeup_body(out_dependencies, out_lines, in_lines, line_offset, src_name, i
         groups = m.groups()
         break
 
-    writeup_line(line_offset + line_num, line, prev_state, state, groups)
+    writeup_line(line_num, line, prev_state, state, groups)
     prev_state = state
 
   # finish.
@@ -482,7 +490,7 @@ def writeup_body(out_dependencies, out_lines, in_lines, line_offset, src_name, i
   out(0, '</script>')
 
 
-def writeup(in_lines, line_offset, src_name, title, description, author, css, js):
+def writeup(src_name, src_lines, title, description, author, css, js):
   'generate a complete html document from a writeup file (or stream of lines).'
 
   html_lines = ['''\
@@ -500,25 +508,21 @@ def writeup(in_lines, line_offset, src_name, title, description, author, css, js
 '''.format(title=title, description=description, author=author, css=css, js=js)]
 
   writeup_body(
-    out_dependencies=None,
     out_lines=html_lines,
-    in_lines=in_lines,
-    line_offset=line_offset,
+    out_dependencies=None,
     src_name=src_name,
-    is_versioned=True)
+    src_lines=src_lines)
   html_lines.append('</body>\n</html>')
   return html_lines
 
 
-def writeup_dependencies(in_lines, line_offset, src_name):
+def writeup_dependencies(src_name, src_lines):
   dependencies = []
   writeup_body(
-    out_dependencies=dependencies,
     out_lines=[],
-    in_lines=in_lines,
-    line_offset=line_offset,
+    out_dependencies=dependencies,
     src_name=src_name,
-    is_versioned=True)
+    src_lines=src_lines)
   return dependencies
 
 
@@ -536,7 +540,7 @@ if __name__ == '__main__':
 
   f_in  = open(args.src_path) if args.src_path else sys.stdin
   f_out = open(args.dst_path, 'w') if args.dst_path else sys.stdout
-  in_lines = iter(f_in)
+  src_lines = iter(f_in)
 
   # css.
   css = minify_css(css)
@@ -544,15 +548,15 @@ if __name__ == '__main__':
   src_name = (args.src_path or '(stdin)')
 
   if args.print_dependencies:
-    dependencies = writeup_dependencies(in_lines,
-      line_offset=1,
-      src_name=src_name)
+    dependencies = writeup_dependencies(
+      src_name=src_name,
+      src_lines=src_lines)
     for dep in dependencies:
       print(dep, file=f_out)
   else:
-    html_lines = writeup(in_lines,
-      line_offset=1,
+    html_lines = writeup(
       src_name=src_name,
+      src_lines=src_lines,
       title=src_name, # TODO.
       description='',
       author='',
