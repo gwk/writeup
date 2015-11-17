@@ -183,11 +183,12 @@ def html_esc_attr(text):
 
 
 class Ctx:
-  def __init__(self, src_name, error, dependencies: list):
-    self.src_name = src_name
-    self.src_dir = os.path.dirname(src_name) or '.'
+  def __init__(self, src_path, error, dependencies: list, dependency_map):
+    self.src_path = src_path
+    self.src_dir = os.path.dirname(src_path) or '.'
     self.error = error # error function.
     self.dependencies = dependencies
+    self.dependency_map = dependency_map
     self.emit_dependencies = (dependencies != None)
 
 # inline span handling.
@@ -222,10 +223,11 @@ def span_embed(text, ctx):
     ctx.dependencies.append(text)
     return ''
   try:
-    with open(os.path.join(ctx.src_dir, text)) as f:
+    path = ctx.dependency_map.get(text, text)
+    with open(os.path.join(ctx.src_dir, path)) as f:
       return f.read()
   except FileNotFoundError:
-    ctx.error('embedded file not found: {}', text)
+    ctx.error('embedded file not found: {}; path: {}', text, path)
 
 span_dispatch = {
   'embed' : span_embed
@@ -270,8 +272,8 @@ def convert_text(text, ctx):
   return ''.join(converted)
 
 
-def writeup_body(out_lines, out_dependencies, src_name, src_lines,
-  line_offset=0, is_versioned=True):
+def writeup_body(out_lines, out_dependencies, src_path, src_lines,
+  line_offset=0, is_versioned=True, dependency_map=None):
   'from input writeup lines, output html lines and dependencies.'
 
   def out(depth, *items):
@@ -299,13 +301,13 @@ def writeup_body(out_lines, out_dependencies, src_name, src_lines,
     #errF('{:03} {}{}: {}', line_num, state_letters[prev_state], state_letters[state], line)
 
     def warn(fmt, *items):
-      errFL('writeup warning: {}: line {}: ' + fmt, src_name, line_num + 1, *items)
+      errFL('writeup warning: {}: line {}: ' + fmt, src_path, line_num + 1, *items)
       errFL("  '{}'", repr(line))
 
     def error(fmt, *items):
-      fail('writeup error: {}: line {}: ' + fmt, src_name, line_num + 1, *items)
+      fail('writeup error: {}: line {}: ' + fmt, src_path, line_num + 1, *items)
 
-    ctx = Ctx(src_name, error, out_dependencies)
+    ctx = Ctx(src_path, error, out_dependencies, dependency_map)
 
     def check_whitespace(len_exp, string, msg_suffix=''):
       for i, c in enumerate(string):
@@ -349,10 +351,11 @@ def writeup_body(out_lines, out_dependencies, src_name, src_lines,
         writeup_body(
           out_lines=quoted_lines,
           out_dependencies=out_dependencies,
-          src_name=src_name,
+          src_path=src_path,
           src_lines=quote_lines,
           line_offset=quote_line_num,
-          is_versioned=False)
+          is_versioned=False,
+          dependency_map=dependency_map)
         for ql in quoted_lines:
           out(section_depth + 1, ql)
         out(section_depth, '</blockquote>')
@@ -490,7 +493,7 @@ def writeup_body(out_lines, out_dependencies, src_name, src_lines,
   out(0, '</script>')
 
 
-def writeup(src_name, src_lines, title, description, author, css, js):
+def writeup(src_path, src_lines, title, description, author, css, js, dependency_map):
   'generate a complete html document from a writeup file (or stream of lines).'
 
   html_lines = ['''\
@@ -510,18 +513,19 @@ def writeup(src_name, src_lines, title, description, author, css, js):
   writeup_body(
     out_lines=html_lines,
     out_dependencies=None,
-    src_name=src_name,
-    src_lines=src_lines)
+    src_path=src_path,
+    src_lines=src_lines,
+    dependency_map=dependency_map)
   html_lines.append('</body>\n</html>')
   return html_lines
 
 
-def writeup_dependencies(src_name, src_lines):
+def writeup_dependencies(src_path, src_lines):
   dependencies = []
   writeup_body(
     out_lines=[],
     out_dependencies=dependencies,
-    src_name=src_name,
+    src_path=src_path,
     src_lines=src_lines)
   return dependencies
 
@@ -532,6 +536,7 @@ if __name__ == '__main__':
   arg_parser.add_argument('src_path', nargs='?', help='input .wu source path (defaults to stdin)')
   arg_parser.add_argument('dst_path', nargs='?', help='output .html path (defaults to stdout)')
   arg_parser.add_argument('-print-dependencies', action='store_true')
+  arg_parser.add_argument('-dependency-map', nargs='?', default='' ,help='map dependency names to paths; format is "k1=v1,...,kN=vN.')
   args = arg_parser.parse_args()
 
   # paths.
@@ -542,26 +547,31 @@ if __name__ == '__main__':
   f_out = open(args.dst_path, 'w') if args.dst_path else sys.stdout
   src_lines = iter(f_in)
 
-  # css.
-  css = minify_css(css)
-
-  src_name = (args.src_path or '(stdin)')
+  src_path = (args.src_path or '(stdin)')
 
   if args.print_dependencies:
     dependencies = writeup_dependencies(
-      src_name=src_name,
+      src_path=src_path,
       src_lines=src_lines)
     for dep in dependencies:
       print(dep, file=f_out)
   else:
+    css = minify_css(css)
+    dependency_map = {}
+    for s in args.dependency_map.split(','):
+      k, p, v = s.partition('=')
+      if k in dependency_map:
+        fail('writeup error: dependency map has duplicate key: {}', k)
+      dependency_map[k] = v
     html_lines = writeup(
-      src_name=src_name,
+      src_path=src_path,
       src_lines=src_lines,
-      title=src_name, # TODO.
+      title=src_path, # TODO.
       description='',
       author='',
       css=css,
-      js=js)
+      js=js,
+      dependency_map=dependency_map)
     for line in html_lines:
       print(line, file=f_out)
 
