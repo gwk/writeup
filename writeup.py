@@ -151,13 +151,9 @@ def errF(fmt, *items):
 def errFL(fmt, *items):
   print(fmt.format(*items), file=sys.stderr)
 
-def fail(fmt, *items):
+def failF(fmt, *items):
   errFL(fmt, *items)
   sys.exit(1)
-
-def check(cond, fmt, *items):
-  if not cond:
-    fail(fmt, *items)
 
 
 # need to preserve spaces in between multiple words followed by semicolon,
@@ -305,7 +301,7 @@ def writeup_body(out_lines, out_dependencies, src_path, src_lines,
       errFL("  '{}'", repr(line))
 
     def error(fmt, *items):
-      fail('writeup error: {}: line {}: ' + fmt, src_path, line_num + 1, *items)
+      failF('writeup error: {}: line {}: ' + fmt, src_path, line_num + 1, *items)
 
     ctx = Ctx(src_path, error, out_dependencies)
 
@@ -453,10 +449,11 @@ def writeup_body(out_lines, out_dependencies, src_path, src_lines,
     except StopIteration:
       version_line = ''
     m = version_re.fullmatch(version_line)
-    check(m, 'first line must specify writeup version matching pattern: {!r}\nfound: {!r}',
-      version_pattern, version_line)
+    if not m:
+      failF('writeup error: first line must specify writeup version matching pattern: {!r}\n  found: {!r}',
+        version_pattern, version_line)
     version = int(m.group(1))
-    check(version == 0, 'unsupported version number: {}', version)
+    if version != 0: failF('unsupported version number: {}', version)
     line_offset += 1
 
   prev_state = s_start
@@ -542,8 +539,8 @@ if __name__ == '__main__':
   args = arg_parser.parse_args()
 
   # paths.
-  check(args.src_path or args.src_path is None, 'src_path cannot be empty string')
-  check(args.dst_path or args.dst_path is None, 'dst_path cannot be empty string')
+  if not (args.src_path or args.src_path is None): failF('src_path cannot be empty string')
+  if not (args.dst_path or args.dst_path is None): failF('dst_path cannot be empty string')
 
   f_in  = open(args.src_path) if args.src_path else sys.stdin
   f_out = open(args.dst_path, 'w') if args.dst_path else sys.stdout
