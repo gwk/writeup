@@ -8,7 +8,7 @@ import sys
 import os.path
 
 
-css = '''
+default_css = '''
 a { background-color: transparent; }
 a:active { outline: 0; }
 a:hover { outline: 0; }
@@ -554,7 +554,7 @@ if __name__ == '__main__':
     for dep in dependencies:
       print(dep, file=f_out)
   else:
-    css = minify_css(css)
+    css = minify_css(default_css)
     html_lines = writeup(
       src_path=src_path,
       src_lines=src_lines,
