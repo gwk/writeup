@@ -530,8 +530,10 @@ def writeup_dependencies(src_path, src_lines):
   return dependencies
 
 
-if __name__ == '__main__':
-  
+__all__ = ['writeup', 'writeup_dependencies']
+
+
+def main():
   arg_parser = argparse.ArgumentParser(description='convert .wu files to html')
   arg_parser.add_argument('src_path', nargs='?', help='input .wu source path (defaults to stdin)')
   arg_parser.add_argument('dst_path', nargs='?', help='output .html path (defaults to stdout)')
@@ -567,3 +569,6 @@ if __name__ == '__main__':
     for line in html_lines:
       print(line, file=f_out)
 
+
+if __name__ == '__main__':
+  main()
