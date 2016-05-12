@@ -448,7 +448,10 @@ def writeup_body(out_lines, out_dependencies, src_path, src_lines,
       error('bad state: {}', state)
 
   if is_versioned:
-    version_line = next(src_lines)
+    try:
+      version_line = next(src_lines)
+    except StopIteration:
+      version_line = ''
     m = version_re.fullmatch(version_line)
     check(m, 'first line must specify writeup version matching pattern: {!r}\nfound: {!r}',
       version_pattern, version_line)
@@ -457,6 +460,7 @@ def writeup_body(out_lines, out_dependencies, src_path, src_lines,
     line_offset += 1
 
   prev_state = s_start
+  line_num = 0
   for line_num, line in enumerate(src_lines, line_offset):
     # any license notice at top gets moved to a footer at the bottom of the html.
     if prev_state == s_start and license_re.fullmatch(line):
