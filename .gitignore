@@ -2,4 +2,6 @@
 __pycache__
 
 # writeup.
+_build
 _misc
+writeup_tool.egg-info
