@@ -124,8 +124,7 @@ window.onkeypress = function(e) {
 
 # version pattern is applied to the first line of documents;
 # programs processing input strings may or may not check for a version as appropriate.
-version_pattern = r'writeup v(\d+)\n'
-version_re = re.compile(version_pattern)
+version_re = re.compile(r'writeup v(\d+)\n')
 
 # license pattern is is only applied to the first line (following the version line, if any).
 license_re = re.compile(r'(©|Copyright|Dedicated to the public domain).*\n')
@@ -451,7 +450,7 @@ def writeup_body(out_lines, out_dependencies, src_path, src_lines,
     m = version_re.fullmatch(version_line)
     if not m:
       failF('writeup error: first line must specify writeup version matching pattern: {!r}\n  found: {!r}',
-        version_pattern, version_line)
+        version_re.pattern, version_line)
     version = int(m.group(1))
     if version != 0: failF('unsupported version number: {}', version)
     line_offset += 1
