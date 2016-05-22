@@ -518,7 +518,7 @@ def writeup(src_path, src_lines, title, description, author, css, js):
   return html_lines
 
 
-def writeup_dependencies(src_path, src_lines):
+def writeup_dependencies(src_path, src_lines, dir_names):
   dependencies = []
   writeup_body(
     out_lines=[],
