@@ -70,12 +70,13 @@ section#s1 {
 }
 ul {
   line-height: 1.333rem;
-  list-style-type: none;
+  list-style-position: inside;
+  list-style-type: disc;
   margin: 0rem;
-  padding: 0rem;
+  padding-left: 0.1rem;
 }
 ul > ul {
-  padding-left: 0.667rem;
+  padding-left: 1.1rem;
 }
 '''
 
@@ -408,9 +409,7 @@ def writeup_body(out_lines, out_dependencies, src_path, src_lines,
         out(section_depth + (i - 1), '</ul>')
       for i in range(list_depth, depth):
         out(section_depth + i, '<ul class="L{}">'.format(i + 1))
-      # note: the bullet is inserted as part of the text,
-      # so that a user select-and-copy preserves the bullet (indentation is still lost).
-      out(section_depth + depth, '<li>• {}</li>'.format(convert_text(text, ctx)))
+      out(section_depth + depth, '<li>{}</li>'.format(convert_text(text, ctx)))
       list_depth = depth
 
     elif state == s_code:

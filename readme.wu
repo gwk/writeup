@@ -93,9 +93,6 @@ Writeup HTML contains javascript that facilitates jumping paging across primary 
 ## Presentation Mode
 Writeup HTML files contain css and javascript for both normal and presentation modes. Press `p` in the browser to toggle between modes. Presentation mode simply adds styling to the primary and secondary sections to make them the full window height; in conjunction with the paging mechanism this serves as a simple presentation mechanism.
 
-## List Bullets
-Writeup currently takes an unconventional approach to list styling: list bullets are disabled in the CSS, and instead bullet characters are inserted into the list item text. This is done so that copying a section of text from the browser retains the bullets (indentation is still lost). It is an experiment, and feedback is welcome.
-
 
 # Implementation
 
