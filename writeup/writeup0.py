@@ -57,6 +57,7 @@ pre {
   font-size: 1rem;
   overflow: auto;
   padding: 0.1rem;
+  border-radius: 4px;
 }
 section { display: block; }
 section.S1 {
