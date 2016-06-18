@@ -36,11 +36,6 @@ code {
   font-family: source code pro, menlo, terminal, monospace;
 }
 footer { display: block; }
-h1 {
-  border-top-color: #E8E8E8;
-  border-top-style: solid;
-  border-top-width: 1px;
-}
 h1 { font-size: 2.0rem; margin: 1.4rem 0 0.6rem 0; }
 h2 { font-size: 1.6rem; margin: 1.2rem 0 0.5rem 0; }
 h3 { font-size: 1.4rem; margin: 1.1rem 0 0.5rem 0; }
@@ -54,7 +49,6 @@ html {
   font-family: source sans pro, sans-serif;
   font-size: 1rem;
 }
-section { display: block; }
 nav { display: block; }
 p { margin: 0.5rem 0; }
 pre {
@@ -63,6 +57,15 @@ pre {
   font-size: 1rem;
   overflow: auto;
   padding: 0.1rem;
+}
+section { display: block; }
+section.S1 {
+  border-top-color: #E8E8E8;
+  border-top-style: solid;
+  border-top-width: 1px;
+}
+section#s1 {
+  border-top-width: 0;
 }
 ul {
   line-height: 1.333rem;
