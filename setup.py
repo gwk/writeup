@@ -29,7 +29,7 @@ setup(
   description='Writeup is a text markup format and standalone tool that translates to HTML5.',
   long_description=long_description,
   packages=['writeup'],
-  entry_points = {'console_scripts': ['writeup=writeup:main']},
+  entry_points = {'console_scripts': ['writeup=writeup.v0:main']},
   keywords=['documentation', 'markup'],
   classifiers=[ # See https://pypi.python.org/pypi?%3Aaction=list_classifiers
     'Development Status :: 3 - Alpha',
