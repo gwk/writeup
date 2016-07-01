@@ -31,17 +31,17 @@ body footer {
   margin: 1rem 0 0 0;
 }
 code {
-  background-color: rgba(0, 0, 0, 0.1);
+  background-color: rgba(0xF0, 0xF0, 0xF0, 0.2);
   border-radius: 3px;
   font-family: source code pro, menlo, terminal, monospace;
 }
 footer { display: block; }
-h1 { font-size: 2.0rem; margin: 1.4rem 0 0.6rem 0; }
-h2 { font-size: 1.6rem; margin: 1.2rem 0 0.5rem 0; }
-h3 { font-size: 1.4rem; margin: 1.1rem 0 0.5rem 0; }
-h4 { font-size: 1.2rem; margin: 1.0rem 0 0.5rem 0; }
-h5 { font-size: 1.1rem; margin: 1.0rem 0 0.5rem 0; }
-h6 { font-size: 1.0rem; margin: 1.0rem 0 0.5rem 0; }
+h1 { font-size: 1.6rem; margin: 0.8rem 0; }
+h2 { font-size: 1.4rem; margin: 0.7rem 0; }
+h3 { font-size: 1.3rem; margin: 0.6rem 0; }
+h4 { font-size: 1.2rem; margin: 0.5rem 0; }
+h5 { font-size: 1.1rem; margin: 0.4rem 0; }
+h6 { font-size: 1.0rem; margin: 0.3rem 0; }
 header { display: block; }
 html {
   background: white;
@@ -64,7 +64,14 @@ section.S1 {
   border-top-color: #E8E8E8;
   border-top-style: solid;
   border-top-width: 1px;
+  margin: 1.6rem 0;
 }
+section.S2 { margin: 1.4rem 0; }
+section.S3 { margin: 1.3rem 0; }
+section.S4 { margin: 1.2rem 0; }
+section.S5 { margin: 1.1rem 0; }
+section.S6 { margin: 1.0rem 0; }
+
 section#s1 {
   border-top-width: 0;
 }
@@ -77,6 +84,12 @@ ul {
 }
 ul > ul {
   padding-left: 1.1rem;
+}
+
+@media print {
+@page {
+  margin: 2cm;
+}
 }
 '''
 
