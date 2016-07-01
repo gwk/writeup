@@ -155,7 +155,7 @@ state_letters = '_©SLQCBTE'
 
 matchers = [
   (s_section, re.compile(r'(#+)(\s*)(.*)\n')),
-  (s_list, re.compile(r'(\s*)-(\s*)(.*)\n')),
+  (s_list, re.compile(r'(\s*)\*(\s*)(.*)\n')),
   (s_quote, re.compile(r'> (.*\n)')),
   (s_code, re.compile(r'\| (.*)\n')),
   (s_blank, re.compile(r'(\s*)\n')),
