@@ -229,6 +229,10 @@ span_pat = r'<((?:[^\\>]|\\>|\\\\)*)>'
 span_esc_re = re.compile(r'\\>|\\\\') # escapes span strings.
 
 
+def span_bold(text, ctx):
+  'convert a bold span into html.'
+  return '<b>{}</b>'.format(html_esc(text))
+
 def span_embed(text, ctx):
   'convert an embed span into html.'
   if ctx.emit_dependencies:
@@ -243,7 +247,8 @@ def span_embed(text, ctx):
     ctx.error('embedded file not found: {}; path: {}', text, path)
 
 span_dispatch = {
-  'embed' : span_embed
+  'b' : span_bold,
+  'embed' : span_embed,
 }
 
 def span_conv(text, ctx):
@@ -253,7 +258,7 @@ def span_conv(text, ctx):
   try:
     f = span_dispatch[tag]
   except KeyError:
-    ctx.error('malformed span has invalid tag: `{}`'.format(tag))
+    ctx.error('span has invalid tag: `{}`'.format(tag))
   return f(body.strip(), ctx)
 
 
