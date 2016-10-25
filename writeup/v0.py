@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 # Dedicated to the public domain under CC0: https://creativecommons.org/publicdomain/zero/1.0/.
 
-import argparse
-import html
 import re
-import sys
-import os.path
+
+from argparse import ArgumentParser
+from html import escape as html_escape
+from os.path import dirname as dir_name, exists as path_exists, join as path_join
+from sys import stdin, stdout, stderr
 
 
 __all__ = ['main', 'writeup', 'writeup_dependencies']
 
 
 def main():
-  arg_parser = argparse.ArgumentParser(description='convert .wu files to html')
+  arg_parser = ArgumentParser(description='convert .wu files to html')
   arg_parser.add_argument('src_path', nargs='?', help='input .wu source path (defaults to stdin)')
   arg_parser.add_argument('dst_path', nargs='?', help='output .html path (defaults to stdout)')
   arg_parser.add_argument('-print-dependencies', action='store_true')
@@ -22,8 +23,8 @@ def main():
   if not (args.src_path or args.src_path is None): failF('src_path cannot be empty string')
   if not (args.dst_path or args.dst_path is None): failF('dst_path cannot be empty string')
 
-  f_in  = open(args.src_path) if args.src_path else sys.stdin
-  f_out = open(args.dst_path, 'w') if args.dst_path else sys.stdout
+  f_in  = open(args.src_path) if args.src_path else stdin
+  f_out = open(args.dst_path, 'w') if args.dst_path else stdout
   src_lines = iter(f_in)
 
   src_path = (args.src_path or '(stdin)')
@@ -124,7 +125,7 @@ span_esc_re = re.compile(r'\\>|\\\\') # escapes span strings.
 class Ctx:
   def __init__(self, src_path, error, dependencies: list):
     self.src_path = src_path
-    self.src_dir = os.path.dirname(src_path) or '.'
+    self.src_dir = dir_name(src_path) or '.'
     self.error = error # error function.
     self.dependencies = dependencies
     self.emit_dependencies = (dependencies != None)
@@ -415,8 +416,8 @@ def span_embed(tag, text, ctx):
     return ''
   try:
     target_path = text
-    path = target_path if os.path.exists(target_path) else os.path.join('_build', target_path)
-    with open(os.path.join(ctx.src_dir, path)) as f:
+    path = target_path if path_exists(target_path) else path_join('_build', target_path)
+    with open(path_join(ctx.src_dir, path)) as f:
       return f.read()
   except FileNotFoundError:
     ctx.error('embedded file not found: {}; path: {}', text, path)
@@ -446,23 +447,23 @@ span_dispatch = {
 # HTML escaping.
 
 def html_esc(text):
-  return html.escape(text, quote=False)
+  return html_escape(text, quote=False)
 
 def html_esc_attr(text):
-  return html.escape(text, quote=True)
+  return html_escape(text, quote=True)
 
 
 # Error reporting.
 
 def errF(fmt, *items):
-  print(fmt.format(*items), end='', file=sys.stderr)
+  print(fmt.format(*items), end='', file=stderr)
 
 def errFL(fmt, *items):
-  print(fmt.format(*items), file=sys.stderr)
+  print(fmt.format(*items), file=stderr)
 
 def failF(fmt, *items):
   errFL(fmt, *items)
-  sys.exit(1)
+  exit(1)
 
 
 # CSS.
