@@ -130,11 +130,25 @@ class Ctx:
   '''
   Structure for contextual information needed by a variety of functions.
   '''
-  def __init__(self, src_path: str, error: Callable[..., None], dependencies: Optional[list]) -> None:
+  def __init__(self, src_path: str, out: Callable[..., None], error: Callable[..., None], dependencies: Optional[list]) -> None:
     self.src_path = src_path
     self.src_dir = dir_name(src_path) or '.'
+    self.out = out
     self.error = error
     self.dependencies = dependencies
+
+
+class LineState:
+  'State variables used by `writeup_line`.'
+  def __init__(self) -> None:
+    self.section_ids = [] # type: List[str] # accumulated list of all section ids.
+    self.paging_ids = [] # type: List[str] # accumulated list of all paging (level 1 & 2) section ids.
+    self.section_stack = [] # type: List[int] # stack of currently open sections.
+    self.list_depth = 0 # currently open list depth.
+    self.license_lines = [] # type: List[str]
+    self.pre_lines = [] # type: List[str]
+    self.quote_line_num = 0
+    self.quote_lines = [] # type: List[str]
 
 
 def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
@@ -148,23 +162,18 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
       s = ' ' * (depth * 2) + ''.join(items)
       out_lines.append(s)
 
-  # state variables used by writeup_line.
-  section_ids = [] # type: List[str] # accumulated list of all section ids.
-  paging_ids = [] # type: List[str] # accumulated list of all paging (level 1 & 2) section ids.
-  section_stack = [] # type: List[int] # stack of currently open sections.
-  list_depth = 0 # currently open list depth.
-  license_lines = [] # type: List[str]
-  pre_lines = [] # type: List[str]
-  quote_line_num = 0
-  quote_lines = [] # type: List[str]
+  ls = LineState()
 
+  def dummy_error_fn(fmt, *items): raise Exception('unreachable')
+  # This is a little weird, but we start with a dummy error reporting function, then update it for every line.
+
+  ctx = Ctx(src_path=src_path, out=out, error=dummy_error_fn, dependencies=out_dependencies)
+
+  #ctx: Ctx, ls: LineState,
   def writeup_line(line_num: int, line: str, prev_state: int, state: int, groups):
     'Inner function to process a line.'
-    nonlocal section_stack
-    nonlocal list_depth
-    nonlocal quote_line_num
 
-    section_depth = len(section_stack)
+    section_depth = len(ls.section_stack)
 
     #errF('{:03} {}{}: {}', line_num, state_letters[prev_state], state_letters[state], line)
 
@@ -175,7 +184,7 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
     def error(fmt, *items):
       failF('writeup error: {}: line {}: ' + fmt, src_path, line_num + 1, *items)
 
-    ctx = Ctx(src_path=src_path, error=error, dependencies=out_dependencies)
+    ctx.error = error
 
     def check_whitespace(len_exp, string, msg_suffix=''):
       for i, c in enumerate(string):
@@ -200,17 +209,17 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
 
     elif prev_state == s_list:
       if state != s_list:
-        for i in range(list_depth, 0, -1):
+        for i in range(ls.list_depth, 0, -1):
           out(section_depth + (i - 1), '</ul>')
-        list_depth = 0
+        ls.list_depth = 0
 
     elif prev_state == s_code:
       if state != s_code:
         # a newline after the open tag looks ok,
         # but a final newline between pre content and the close tag looks bad.
         # therefore we must take care to format the pre contents without a final newline.
-        out(0, '<pre>\n{}</pre>'.format('\n'.join(pre_lines)))
-        pre_lines.clear()
+        out(0, '<pre>\n{}</pre>'.format('\n'.join(ls.pre_lines)))
+        ls.pre_lines.clear()
 
     elif prev_state == s_quote:
       if state != s_quote:
@@ -220,13 +229,13 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
           out_lines=quoted_lines,
           out_dependencies=out_dependencies,
           src_path=src_path,
-          src_lines=quote_lines,
-          line_offset=quote_line_num,
+          src_lines=ls.quote_lines,
+          line_offset=ls.quote_line_num,
           is_versioned=False)
         for ql in quoted_lines:
           out(section_depth + 1, ql)
         out(section_depth, '</blockquote>')
-        quote_lines.clear()
+        ls.quote_lines.clear()
 
     elif prev_state == s_blank:
       pass
@@ -248,22 +257,22 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
       depth = len(hashes)
       h_num = min(6, depth)
       prev_index = 0
-      while len(section_stack) >= depth: # close previous peer section and its children.
-        sid = '.'.join(str(i) for i in section_stack)
-        prev_index = section_stack.pop()
-        out(len(section_stack), '</section>') # <!--s{}-->'.format(sid))
-      while len(section_stack) < depth: # open new section and any children.
+      while len(ls.section_stack) >= depth: # close previous peer section and its children.
+        sid = '.'.join(str(i) for i in ls.section_stack)
+        prev_index = ls.section_stack.pop()
+        out(len(ls.section_stack), '</section>') # <!--s{}-->'.format(sid))
+      while len(ls.section_stack) < depth: # open new section and any children.
         index = prev_index + 1
-        section_stack.append(index)
-        d = len(section_stack)
-        sid = '.'.join(str(i) for i in section_stack)
+        ls.section_stack.append(index)
+        d = len(ls.section_stack)
+        sid = '.'.join(str(i) for i in ls.section_stack)
         out(d - 1, '<section class="S{}" id="s{}">'.format(d, sid))
         prev_index = 0
       # current.
       out(depth, '<h{} id="h{}">{}</h{}>'.format(h_num, sid, convert_text(text, ctx), h_num))
-      section_ids.append(sid)
+      ls.section_ids.append(sid)
       if depth <= 2:
-        paging_ids.append(sid)
+        ls.paging_ids.append(sid)
 
     elif state == s_list:
       indents, spaces, text = groups
@@ -273,22 +282,22 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
         warn('odd indentation: {}', l)
       depth = l // 2 + 1
       check_whitespace(1, spaces, ' following dash')
-      for i in range(list_depth, depth, -1):
+      for i in range(ls.list_depth, depth, -1):
         out(section_depth + (i - 1), '</ul>')
-      for i in range(list_depth, depth):
+      for i in range(ls.list_depth, depth):
         out(section_depth + i, '<ul class="L{}">'.format(i + 1))
       out(section_depth + depth, '<li>{}</li>'.format(convert_text(text, ctx)))
-      list_depth = depth
+      ls.list_depth = depth
 
     elif state == s_code:
       text, = groups
-      pre_lines.append(html_esc(text))
+      ls.pre_lines.append(html_esc(text))
 
     elif state == s_quote:
       quoted_line, = groups
       if state != s_quote:
-        quote_line_num = line_num
-      quote_lines.append(quoted_line) # not converted here; text is fully transformed later.
+        ls.quote_line_num = line_num
+      ls.quote_lines.append(quoted_line) # not converted here; text is fully transformed later.
 
     elif state == s_blank:
       spaces, = groups
@@ -307,8 +316,8 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
     elif state == s_end:
       for i in range(section_depth, 0, -1):
         out(i - 1, '</section>')
-      if license_lines:
-        out(0, '<footer id="footer">\n', '<br />\n'.join(license_lines), '\n</footer>')
+      if ls.license_lines:
+        out(0, '<footer id="footer">\n', '<br />\n'.join(ls.license_lines), '\n</footer>')
 
     else:
       error('bad state: {}', state)
@@ -332,13 +341,13 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
   for line_num, line in enumerate(iter_src_lines, line_offset):
     # any license notice at top gets moved to a footer at the bottom of the html.
     if prev_state == s_start and license_re.fullmatch(line):
-      license_lines.append(line.strip())
+      ls.license_lines.append(line.strip())
       prev_state = s_license
       continue
     if prev_state == s_license: # consume remaining license lines.
       l = line.strip()
       if l: # not empty.
-        license_lines.append(l)
+        ls.license_lines.append(l)
         continue # remain in s_license.
 
     # license has ended; determine state.
@@ -359,8 +368,8 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
 
   # generate tables.
   out(0, '<script type="text/javascript"> "use strict";')
-  out(0, 'section_ids = [{}];'.format(','.join("'s{}'".format(sid) for sid in section_ids)))
-  out(0, "paging_ids = ['body', {}];".format(','.join("'s{}'".format(sid) for sid in paging_ids)))
+  out(0, 'section_ids = [{}];'.format(','.join("'s{}'".format(sid) for sid in ls.section_ids)))
+  out(0, "paging_ids = ['body', {}];".format(','.join("'s{}'".format(pid) for pid in ls.paging_ids)))
   out(0, '</script>')
 
 
