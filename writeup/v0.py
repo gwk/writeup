@@ -8,136 +8,81 @@ import sys
 import os.path
 
 
-default_css = '''
-a { background-color: transparent; }
-a:active { outline: 0; }
-a:hover { outline: 0; }
-blockquote {
-  border-left-color: #E0E0E0;
-  border-left-style: solid;
-  border-left-width: 0.333rem;
-  margin: 0;
-  padding: 0 0.677rem;
-}
-body {
-  margin: 1rem;
-  }
-body footer {
-  border-top-color: #E8E8E8;
-  border-top-style: solid;
-  border-top-width: 1px;
-  color: #606060;
-  font-size: .875rem;
-  margin: 1rem 0 0 0;
-}
-code {
-  background-color: rgba(0xF0, 0xF0, 0xF0, 0.2);
-  border-radius: 3px;
-  font-family: source code pro, menlo, terminal, monospace;
-}
-footer { display: block; }
-h1 { font-size: 1.6rem; margin: 0.8rem 0; }
-h2 { font-size: 1.4rem; margin: 0.7rem 0; }
-h3 { font-size: 1.3rem; margin: 0.6rem 0; }
-h4 { font-size: 1.2rem; margin: 0.5rem 0; }
-h5 { font-size: 1.1rem; margin: 0.4rem 0; }
-h6 { font-size: 1.0rem; margin: 0.3rem 0; }
-header { display: block; }
-html {
-  background: white;
-  color: black; 
-  font-family: source sans pro, sans-serif;
-  font-size: 1rem;
-}
-nav { display: block; }
-p { margin: 0.5rem 0; }
-pre {
-  background: #F0F0F0;
-  font-family: source code pro, menlo, terminal, monospace;
-  font-size: 1rem;
-  overflow: auto;
-  padding: 0.1rem;
-  border-radius: 4px;
-}
-section { display: block; }
-section.S1 {
-  border-top-color: #E8E8E8;
-  border-top-style: solid;
-  border-top-width: 1px;
-  margin: 1.6rem 0;
-}
-section.S2 { margin: 1.4rem 0; }
-section.S3 { margin: 1.3rem 0; }
-section.S4 { margin: 1.2rem 0; }
-section.S5 { margin: 1.1rem 0; }
-section.S6 { margin: 1.0rem 0; }
-
-section#s1 {
-  border-top-width: 0;
-}
-ul {
-  line-height: 1.333rem;
-  list-style-position: inside;
-  list-style-type: disc;
-  margin: 0rem;
-  padding-left: 0.1rem;
-}
-ul > ul {
-  padding-left: 1.1rem;
-}
-
-@media print {
-@page {
-  margin: 2cm;
-}
-}
-'''
+__all__ = ['main', 'writeup', 'writeup_dependencies']
 
 
-js = '''
-function scrollToElementId(id) {
-  window.scrollTo(0, document.getElementById(id).offsetTop);
-}
+def main():
+  arg_parser = argparse.ArgumentParser(description='convert .wu files to html')
+  arg_parser.add_argument('src_path', nargs='?', help='input .wu source path (defaults to stdin)')
+  arg_parser.add_argument('dst_path', nargs='?', help='output .html path (defaults to stdout)')
+  arg_parser.add_argument('-print-dependencies', action='store_true')
+  args = arg_parser.parse_args()
 
-var in_pres_mode = false;
-function togglePresentationMode() {
-  in_pres_mode = !in_pres_mode;
-  for (var sid of paging_ids) {
-    var section = document.getElementById(sid);
-    if (section.id == 'body') {
-      // skip; not actually a section.
-    } else {
-      section.style['margin'] = in_pres_mode ? '100vh 0 0 0' : '0';
-    }
-  }
-  var footer = document.getElementById('footer');
-  footer.style['margin'] = in_pres_mode ? '100vh 0 0 0' : '0';
-}
+  # paths.
+  if not (args.src_path or args.src_path is None): failF('src_path cannot be empty string')
+  if not (args.dst_path or args.dst_path is None): failF('dst_path cannot be empty string')
 
-var section_ids = null;
-var paging_ids = null;
-var paging_idx = 0;
+  f_in  = open(args.src_path) if args.src_path else sys.stdin
+  f_out = open(args.dst_path, 'w') if args.dst_path else sys.stdout
+  src_lines = iter(f_in)
 
-window.onkeydown = function(e) { 
-  if (e.keyCode === 37) { // left.
-    if (paging_idx > 0) {
-      paging_idx -= 1;
-    }
-    scrollToElementId(paging_ids[paging_idx]);
-  } else if (e.keyCode === 39) { // right.
-    if (paging_idx < paging_ids.length - 1) {
-      paging_idx += 1;
-    }
-    scrollToElementId(paging_ids[paging_idx]);
-  }
-};
+  src_path = (args.src_path or '(stdin)')
 
-window.onkeypress = function(e) {
-  if (e.charCode === 112) { // 'p'.
-    togglePresentationMode();
-  }
-};
-'''
+  if args.print_dependencies:
+    dependencies = writeup_dependencies(
+      src_path=src_path,
+      src_lines=src_lines)
+    for dep in dependencies:
+      print(dep, file=f_out)
+  else:
+    css = minify_css(default_css)
+    html_lines = writeup(
+      src_path=src_path,
+      src_lines=src_lines,
+      title=src_path, # TODO.
+      description='',
+      author='',
+      css=css,
+      js=js)
+    for line in html_lines:
+      print(line, file=f_out)
+
+
+def writeup(src_path, src_lines, title, description, author, css, js):
+  'generate a complete html document from a writeup file (or stream of lines).'
+
+  html_lines = ['''\
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{title}</title>
+  <meta name="description" content="{description}">
+  <meta name="author" content="{author}">
+  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
+  <style type="text/css">{css}</style>
+  <script type="text/javascript"> "use strict";{js}</script>
+</head>
+<body id="body">\
+'''.format(title=title, description=description, author=author, css=css, js=js)]
+
+  writeup_body(
+    out_lines=html_lines,
+    out_dependencies=None,
+    src_path=src_path,
+    src_lines=src_lines)
+  html_lines.append('</body>\n</html>')
+  return html_lines
+
+
+def writeup_dependencies(src_path, src_lines, dir_names):
+  dependencies = []
+  writeup_body(
+    out_lines=[],
+    out_dependencies=dependencies,
+    src_path=src_path,
+    src_lines=src_lines)
+  dependencies.sort()
+  return dependencies
 
 
 # version pattern is applied to the first line of documents;
@@ -161,38 +106,19 @@ matchers = [
   (s_blank, re.compile(r'(\s*)\n')),
 ]
 
+# span regexes.
+# general pattern for quoting with escapes is Q([^EQ]|EQ|EE)*Q.
+# it is crucial that the escape character E is excluded in the '[^EQ]' clause,
+# or else when matching against 'QEQQ', the pattern greedily matches 'QEQ'.
+# to allow a trailing escape character, the 'EE' clause is also required.
 
-def errF(fmt, *items):
-  print(fmt.format(*items), end='', file=sys.stderr)
+# backtick code span.
+span_code_pat = r'`((?:[^\\`]|\\`|\\\\)*)`' # finds code spans.
+span_code_esc_re = re.compile(r'\\`|\\\\') # escapes code strings.
 
-def errFL(fmt, *items):
-  print(fmt.format(*items), file=sys.stderr)
-
-def failF(fmt, *items):
-  errFL(fmt, *items)
-  sys.exit(1)
-
-
-# need to preserve spaces in between multiple words followed by semicolon,
-# for cases like `margin: 0 0 0 0;`.
-# the first choice clause captures these chunks in group 1;
-# other choice clauses cause group 1 to hold None.
-# we could do more agressive minification but this is good enough for now.
-minify_css_re = re.compile(r'(?<=: )(.+?;)|\s+|/\*.*?\*/', flags=re.S)
-
-def minify_css(src):
-  chunks = []
-  for chunk in minify_css_re.split(src):
-    if chunk: # discard empty chunks and splits that are None (not captured).
-      chunks.append(chunk)
-  return ' '.join(chunks) # use empty string joiner for more aggressive minification.
-
-
-def html_esc(text):
-  return html.escape(text, quote=False)
-
-def html_esc_attr(text):
-  return html.escape(text, quote=True)
+# generic angle bracket span.
+span_pat = r'<((?:[^\\>]|\\>|\\\\)*)>'
+span_esc_re = re.compile(r'\\>|\\\\') # escapes span strings.
 
 
 class Ctx:
@@ -202,107 +128,6 @@ class Ctx:
     self.error = error # error function.
     self.dependencies = dependencies
     self.emit_dependencies = (dependencies != None)
-
-# inline span handling.
-
-# general pattern for quoting with escapes is Q([^EQ]|EQ|EE)*Q.
-# it is crucial that the escape character E is excluded in the '[^EQ]' clause,
-# or else when matching against 'QEQQ', the pattern greedily matches 'QEQ'.
-# to allow a trailing escape character, the 'EE' clause is also required.
-span_char_esc_fn = lambda m: m.group(0)[1:] # strip leading '\' escape.
-
-# backtick code span.
-
-span_code_pat = r'`((?:[^\\`]|\\`|\\\\)*)`' # finds code spans.
-span_code_esc_re = re.compile(r'\\`|\\\\') # escapes code strings.
-
-def span_code_conv(text, ctx):
-  'convert backtick code span to html.'
-  text_escaped = span_code_esc_re.sub(span_char_esc_fn, text)
-  text_escaped_html = html_esc(text_escaped)
-  text_spaced = text_escaped_html.replace(' ', '&nbsp;')
-  return '<code>{}</code>'.format(text_spaced)
-
-# generic angle bracket spans.
-
-span_pat = r'<((?:[^\\>]|\\>|\\\\)*)>'
-span_esc_re = re.compile(r'\\>|\\\\') # escapes span strings.
-
-
-def span_bold(tag, text, ctx):
-  'convert a bold span into html.'
-  return '<b>{}</b>'.format(html_esc(text))
-
-def span_embed(tag, text, ctx):
-  'convert an embed span into html.'
-  if ctx.emit_dependencies:
-    ctx.dependencies.append(text)
-    return ''
-  try:
-    target_path = text
-    path = target_path if os.path.exists(target_path) else os.path.join('_build', target_path)
-    with open(os.path.join(ctx.src_dir, path)) as f:
-      return f.read()
-  except FileNotFoundError:
-    ctx.error('embedded file not found: {}; path: {}', text, path)
-
-def span_link(tag, text, ctx):
-  'convert a link span into html.'
-  words = text.split()
-  if not words:
-    ctx.error('link is empty: {!r}: {!r}', tag, text)
-  link = '{}:{}'.format(tag, text)
-  if len(words) == 1:
-    visible = link
-  else:
-    visible = ' '.join(words[1:])
-  return '<a href={}>{}</a>'.format(link, html_esc(visible))
-
-span_dispatch = {
-  'b' : span_bold,
-  'embed' : span_embed,
-  'http': span_link,
-  'https': span_link,
-  'mailto': span_link,
-}
-
-def span_conv(text, ctx):
-  'convert generic angle bracket span to html.'
-  tag, colon, body = text.partition(':')
-  if colon is None: error('malformed span is missing colon after tag: `{}`'.format(text))
-  try:
-    f = span_dispatch[tag]
-  except KeyError:
-    ctx.error('span has invalid tag: `{}`'.format(tag))
-  return f(tag, body.strip(), ctx)
-
-
-# span patterns and associated handlers.
-span_kinds = [
-  (span_code_pat, span_code_conv),
-  (span_pat, span_conv),
-]
-
-# single re, wrapping each span sub-pattern in capturing parentheses.
-span_re = re.compile('|'.join(p for p, f in span_kinds))
-
-def convert_text(text, ctx):
-  'convert writeup span elements in a text string to html.'
-  converted = []
-  prev_idx = 0
-  for m in span_re.finditer(text):
-    start_idx = m.start()
-    if prev_idx < start_idx: # flush preceding text.
-      converted.append(html_esc(text[prev_idx:start_idx]))
-    prev_idx = m.end()
-    for i, (pattern, fn) in enumerate(span_kinds, 1): # groups are 1-indexed.
-      group = m.group(i)
-      if group is not None:
-        converted.append(fn(group, ctx))
-        break
-  if prev_idx < len(text):
-    converted.append(html_esc(text[prev_idx:]))
-  return ''.join(converted)
 
 
 def writeup_body(out_lines, out_dependencies, src_path, src_lines,
@@ -368,7 +193,7 @@ def writeup_body(out_lines, out_dependencies, src_path, src_lines,
         for i in range(list_depth, 0, -1):
           out(section_depth + (i - 1), '</ul>')
         list_depth = 0
-    
+
     elif prev_state == s_code:
       if state != s_code:
         # a newline after the open tag looks ok,
@@ -376,7 +201,7 @@ def writeup_body(out_lines, out_dependencies, src_path, src_lines,
         # therefore we must take care to format the pre contents without a final newline.
         out(0, '<pre>\n{}</pre>'.format('\n'.join(pre_lines)))
         pre_lines.clear()
-    
+
     elif prev_state == s_quote:
       if state != s_quote:
         out(section_depth, '<blockquote>')
@@ -392,7 +217,7 @@ def writeup_body(out_lines, out_dependencies, src_path, src_lines,
           out(section_depth + 1, ql)
         out(section_depth, '</blockquote>')
         quote_lines.clear()
-    
+
     elif prev_state == s_blank:
       pass
 
@@ -401,7 +226,7 @@ def writeup_body(out_lines, out_dependencies, src_path, src_lines,
         out(section_depth, '<br />')
       else:
         out(section_depth, '</p>')
-    
+
     else:
       error('bad prev_state: {}', prev_state)
 
@@ -528,82 +353,265 @@ def writeup_body(out_lines, out_dependencies, src_path, src_lines,
   out(0, '</script>')
 
 
-def writeup(src_path, src_lines, title, description, author, css, js):
-  'generate a complete html document from a writeup file (or stream of lines).'
-
-  html_lines = ['''\
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>{title}</title>
-  <meta name="description" content="{description}">
-  <meta name="author" content="{author}">
-  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
-  <style type="text/css">{css}</style>
-  <script type="text/javascript"> "use strict";{js}</script>
-</head>
-<body id="body">\
-'''.format(title=title, description=description, author=author, css=css, js=js)]
-
-  writeup_body(
-    out_lines=html_lines,
-    out_dependencies=None,
-    src_path=src_path,
-    src_lines=src_lines)
-  html_lines.append('</body>\n</html>')
-  return html_lines
+def convert_text(text, ctx):
+  'convert writeup span elements in a text string to html.'
+  converted = []
+  prev_idx = 0
+  for m in span_re.finditer(text):
+    start_idx = m.start()
+    if prev_idx < start_idx: # flush preceding text.
+      converted.append(html_esc(text[prev_idx:start_idx]))
+    prev_idx = m.end()
+    for i, (pattern, fn) in enumerate(span_kinds, 1): # groups are 1-indexed.
+      group = m.group(i)
+      if group is not None:
+        converted.append(fn(group, ctx))
+        break
+  if prev_idx < len(text):
+    converted.append(html_esc(text[prev_idx:]))
+  return ''.join(converted)
 
 
-def writeup_dependencies(src_path, src_lines, dir_names):
-  dependencies = []
-  writeup_body(
-    out_lines=[],
-    out_dependencies=dependencies,
-    src_path=src_path,
-    src_lines=src_lines)
-  dependencies.sort()
-  return dependencies
+def span_conv(text, ctx):
+  'convert generic angle bracket span to html.'
+  tag, colon, body = text.partition(':')
+  if colon is None: error('malformed span is missing colon after tag: `{}`'.format(text))
+  try:
+    f = span_dispatch[tag]
+  except KeyError:
+    ctx.error('span has invalid tag: `{}`'.format(tag))
+  return f(tag, body.strip(), ctx)
 
 
-def main():
-  arg_parser = argparse.ArgumentParser(description='convert .wu files to html')
-  arg_parser.add_argument('src_path', nargs='?', help='input .wu source path (defaults to stdin)')
-  arg_parser.add_argument('dst_path', nargs='?', help='output .html path (defaults to stdout)')
-  arg_parser.add_argument('-print-dependencies', action='store_true')
-  args = arg_parser.parse_args()
+def span_code_conv(text, ctx):
+  'convert backtick code span to html.'
+  span_char_esc_fn = lambda m: m.group(0)[1:] # strip leading '\' escape.
+  text_escaped = span_code_esc_re.sub(span_char_esc_fn, text)
+  text_escaped_html = html_esc(text_escaped)
+  text_spaced = text_escaped_html.replace(' ', '&nbsp;')
+  return '<code>{}</code>'.format(text_spaced)
 
-  # paths.
-  if not (args.src_path or args.src_path is None): failF('src_path cannot be empty string')
-  if not (args.dst_path or args.dst_path is None): failF('dst_path cannot be empty string')
 
-  f_in  = open(args.src_path) if args.src_path else sys.stdin
-  f_out = open(args.dst_path, 'w') if args.dst_path else sys.stdout
-  src_lines = iter(f_in)
+# span patterns and associated handlers.
+span_kinds = [
+  (span_code_pat, span_code_conv),
+  (span_pat, span_conv),
+]
 
-  src_path = (args.src_path or '(stdin)')
+# single re, wrapping each span sub-pattern in capturing parentheses.
+span_re = re.compile('|'.join(p for p, f in span_kinds))
 
-  if args.print_dependencies:
-    dependencies = writeup_dependencies(
-      src_path=src_path,
-      src_lines=src_lines)
-    for dep in dependencies:
-      print(dep, file=f_out)
+
+# generic angle bracket spans.
+
+def span_bold(tag, text, ctx):
+  'convert a bold span into html.'
+  return '<b>{}</b>'.format(html_esc(text))
+
+def span_embed(tag, text, ctx):
+  'convert an embed span into html.'
+  if ctx.emit_dependencies:
+    ctx.dependencies.append(text)
+    return ''
+  try:
+    target_path = text
+    path = target_path if os.path.exists(target_path) else os.path.join('_build', target_path)
+    with open(os.path.join(ctx.src_dir, path)) as f:
+      return f.read()
+  except FileNotFoundError:
+    ctx.error('embedded file not found: {}; path: {}', text, path)
+
+def span_link(tag, text, ctx):
+  'convert a link span into html.'
+  words = text.split()
+  if not words:
+    ctx.error('link is empty: {!r}: {!r}', tag, text)
+  link = '{}:{}'.format(tag, text)
+  if len(words) == 1:
+    visible = link
   else:
-    css = minify_css(default_css)
-    html_lines = writeup(
-      src_path=src_path,
-      src_lines=src_lines,
-      title=src_path, # TODO.
-      description='',
-      author='',
-      css=css,
-      js=js)
-    for line in html_lines:
-      print(line, file=f_out)
+    visible = ' '.join(words[1:])
+  return '<a href={}>{}</a>'.format(link, html_esc(visible))
+
+span_dispatch = {
+  'b' : span_bold,
+  'embed' : span_embed,
+  'http': span_link,
+  'https': span_link,
+  'mailto': span_link,
+}
 
 
-__all__ = ['writeup', 'writeup_dependencies', 'main']
+
+# HTML escaping.
+
+def html_esc(text):
+  return html.escape(text, quote=False)
+
+def html_esc_attr(text):
+  return html.escape(text, quote=True)
 
 
-if __name__ == '__main__':
-  main()
+# Error reporting.
+
+def errF(fmt, *items):
+  print(fmt.format(*items), end='', file=sys.stderr)
+
+def errFL(fmt, *items):
+  print(fmt.format(*items), file=sys.stderr)
+
+def failF(fmt, *items):
+  errFL(fmt, *items)
+  sys.exit(1)
+
+
+# CSS.
+
+minify_css_re = re.compile(r'(?<=: )(.+?;)|\s+|/\*.*?\*/', flags=re.S)
+# need to preserve spaces in between multiple words followed by semicolon,
+# for cases like `margin: 0 0 0 0;`.
+# the first choice clause captures these chunks in group 1;
+# other choice clauses cause group 1 to hold None.
+# we could do more agressive minification but this is good enough for now.
+
+def minify_css(src):
+  chunks = []
+  for chunk in minify_css_re.split(src):
+    if chunk: # discard empty chunks and splits that are None (not captured).
+      chunks.append(chunk)
+  return ' '.join(chunks) # use empty string joiner for more aggressive minification.
+
+
+default_css = '''
+a { background-color: transparent; }
+a:active { outline: 0; }
+a:hover { outline: 0; }
+blockquote {
+  border-left-color: #E0E0E0;
+  border-left-style: solid;
+  border-left-width: 0.333rem;
+  margin: 0;
+  padding: 0 0.677rem;
+}
+body {
+  margin: 1rem;
+  }
+body footer {
+  border-top-color: #E8E8E8;
+  border-top-style: solid;
+  border-top-width: 1px;
+  color: #606060;
+  font-size: .875rem;
+  margin: 1rem 0 0 0;
+}
+code {
+  background-color: rgba(0xF0, 0xF0, 0xF0, 0.2);
+  border-radius: 3px;
+  font-family: source code pro, menlo, terminal, monospace;
+}
+footer { display: block; }
+h1 { font-size: 1.6rem; margin: 0.8rem 0; }
+h2 { font-size: 1.4rem; margin: 0.7rem 0; }
+h3 { font-size: 1.3rem; margin: 0.6rem 0; }
+h4 { font-size: 1.2rem; margin: 0.5rem 0; }
+h5 { font-size: 1.1rem; margin: 0.4rem 0; }
+h6 { font-size: 1.0rem; margin: 0.3rem 0; }
+header { display: block; }
+html {
+  background: white;
+  color: black;
+  font-family: source sans pro, sans-serif;
+  font-size: 1rem;
+}
+nav { display: block; }
+p { margin: 0.5rem 0; }
+pre {
+  background: #F0F0F0;
+  font-family: source code pro, menlo, terminal, monospace;
+  font-size: 1rem;
+  overflow: auto;
+  padding: 0.1rem;
+  border-radius: 4px;
+}
+section { display: block; }
+section.S1 {
+  border-top-color: #E8E8E8;
+  border-top-style: solid;
+  border-top-width: 1px;
+  margin: 1.6rem 0;
+}
+section.S2 { margin: 1.4rem 0; }
+section.S3 { margin: 1.3rem 0; }
+section.S4 { margin: 1.2rem 0; }
+section.S5 { margin: 1.1rem 0; }
+section.S6 { margin: 1.0rem 0; }
+
+section#s1 {
+  border-top-width: 0;
+}
+ul {
+  line-height: 1.333rem;
+  list-style-position: inside;
+  list-style-type: disc;
+  margin: 0rem;
+  padding-left: 0.1rem;
+}
+ul > ul {
+  padding-left: 1.1rem;
+}
+
+@media print {
+@page {
+  margin: 2cm;
+}
+}
+'''
+
+
+js = '''
+function scrollToElementId(id) {
+  window.scrollTo(0, document.getElementById(id).offsetTop);
+}
+
+var in_pres_mode = false;
+function togglePresentationMode() {
+  in_pres_mode = !in_pres_mode;
+  for (var sid of paging_ids) {
+    var section = document.getElementById(sid);
+    if (section.id == 'body') {
+      // skip; not actually a section.
+    } else {
+      section.style['margin'] = in_pres_mode ? '100vh 0 0 0' : '0';
+    }
+  }
+  var footer = document.getElementById('footer');
+  footer.style['margin'] = in_pres_mode ? '100vh 0 0 0' : '0';
+}
+
+var section_ids = null;
+var paging_ids = null;
+var paging_idx = 0;
+
+window.onkeydown = function(e) {
+  if (e.keyCode === 37) { // left.
+    if (paging_idx > 0) {
+      paging_idx -= 1;
+    }
+    scrollToElementId(paging_ids[paging_idx]);
+  } else if (e.keyCode === 39) { // right.
+    if (paging_idx < paging_ids.length - 1) {
+      paging_idx += 1;
+    }
+    scrollToElementId(paging_ids[paging_idx]);
+  }
+};
+
+window.onkeypress = function(e) {
+  if (e.charCode === 112) { // 'p'.
+    togglePresentationMode();
+  }
+};
+'''
+
+
+if __name__ == '__main__': main()
