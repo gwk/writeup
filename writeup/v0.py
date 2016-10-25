@@ -7,6 +7,7 @@ from argparse import ArgumentParser
 from html import escape as html_escape
 from os.path import dirname as dir_name, exists as path_exists, join as path_join
 from sys import stdin, stdout, stderr
+from typing import Callable, Iterable, List, Optional, Union
 
 
 __all__ = ['main', 'writeup', 'writeup_dependencies']
@@ -25,21 +26,20 @@ def main():
 
   f_in  = open(args.src_path) if args.src_path else stdin
   f_out = open(args.dst_path, 'w') if args.dst_path else stdout
-  src_lines = iter(f_in)
 
   src_path = (args.src_path or '<stdin>')
 
   if args.print_dependencies:
     dependencies = writeup_dependencies(
       src_path=src_path,
-      src_lines=src_lines)
+      src_lines=f_in)
     for dep in dependencies:
       print(dep, file=f_out)
   else:
     css = minify_css(default_css)
     html_lines = writeup(
       src_path=src_path,
-      src_lines=src_lines,
+      src_lines=f_in,
       title=src_path, # TODO.
       description='',
       author='',
@@ -75,10 +75,14 @@ def writeup(src_path, src_lines, title, description, author, css, js):
   return html_lines
 
 
-def writeup_dependencies(src_path, src_lines, dir_names):
+def writeup_dependencies(src_path, src_lines, dir_names=None):
+  '''
+  Return a list of dependencies from the writeup in `src_lines`.
+  `dir_names` is an ignored argument passed by the external `muck` tool.
+  '''
   dependencies = []
   writeup_body(
-    out_lines=[],
+    out_lines=None,
     out_dependencies=dependencies,
     src_path=src_path,
     src_lines=src_lines)
@@ -123,34 +127,39 @@ span_esc_re = re.compile(r'\\>|\\\\') # escapes span strings.
 
 
 class Ctx:
-  def __init__(self, src_path, error, dependencies: list):
+  '''
+  Structure for contextual information needed by a variety of functions.
+  '''
+  def __init__(self, src_path: str, error: Callable[..., None], dependencies: Optional[list]) -> None:
     self.src_path = src_path
     self.src_dir = dir_name(src_path) or '.'
-    self.error = error # error function.
+    self.error = error
     self.dependencies = dependencies
-    self.emit_dependencies = (dependencies != None)
 
 
-def writeup_body(out_lines, out_dependencies, src_path, src_lines,
-  line_offset=0, is_versioned=True, dependency_map=None):
-  'from input writeup lines, output html lines and dependencies.'
+def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
+  src_path: str, src_lines: Iterable[str], line_offset=0, is_versioned=True, dependency_map=None):
+  'Convert input writeup in `src_lines` to output html lines and dependencies.'
 
-  def out(depth, *items):
-    s = ' ' * (depth * 2) + ''.join(items)
-    out_lines.append(s)
+  if out_lines is None:
+    def out(depth: int, *items) -> None: pass
+  else:
+    def out(depth: int, *items) -> None:
+      s = ' ' * (depth * 2) + ''.join(items)
+      out_lines.append(s)
 
   # state variables used by writeup_line.
-  section_ids = [] # accumulated list of all section ids.
-  paging_ids = [] # accumulated list of all paging (level 1 & 2) section ids.
-  section_stack = [] # stack of currently open sections.
+  section_ids = [] # type: List[str] # accumulated list of all section ids.
+  paging_ids = [] # type: List[str] # accumulated list of all paging (level 1 & 2) section ids.
+  section_stack = [] # type: List[int] # stack of currently open sections.
   list_depth = 0 # currently open list depth.
-  license_lines = []
-  pre_lines = []
+  license_lines = [] # type: List[str]
+  pre_lines = [] # type: List[str]
   quote_line_num = 0
-  quote_lines = []
+  quote_lines = [] # type: List[str]
 
-  def writeup_line(line_num, line, prev_state, state, groups):
-    'process a line.'
+  def writeup_line(line_num: int, line: str, prev_state: int, state: int, groups):
+    'Inner function to process a line.'
     nonlocal section_stack
     nonlocal list_depth
     nonlocal quote_line_num
@@ -166,7 +175,7 @@ def writeup_body(out_lines, out_dependencies, src_path, src_lines,
     def error(fmt, *items):
       failF('writeup error: {}: line {}: ' + fmt, src_path, line_num + 1, *items)
 
-    ctx = Ctx(src_path, error, out_dependencies)
+    ctx = Ctx(src_path=src_path, error=error, dependencies=out_dependencies)
 
     def check_whitespace(len_exp, string, msg_suffix=''):
       for i, c in enumerate(string):
@@ -206,7 +215,7 @@ def writeup_body(out_lines, out_dependencies, src_path, src_lines,
     elif prev_state == s_quote:
       if state != s_quote:
         out(section_depth, '<blockquote>')
-        quoted_lines = []
+        quoted_lines = [] # type: List[str]
         writeup_body(
           out_lines=quoted_lines,
           out_dependencies=out_dependencies,
@@ -304,9 +313,10 @@ def writeup_body(out_lines, out_dependencies, src_path, src_lines,
     else:
       error('bad state: {}', state)
 
+  iter_src_lines = iter(src_lines)
   if is_versioned:
     try:
-      version_line = next(src_lines)
+      version_line = next(iter_src_lines)
     except StopIteration:
       version_line = ''
     m = version_re.fullmatch(version_line)
@@ -319,7 +329,7 @@ def writeup_body(out_lines, out_dependencies, src_path, src_lines,
 
   prev_state = s_start
   line_num = 0
-  for line_num, line in enumerate(src_lines, line_offset):
+  for line_num, line in enumerate(iter_src_lines, line_offset):
     # any license notice at top gets moved to a footer at the bottom of the html.
     if prev_state == s_start and license_re.fullmatch(line):
       license_lines.append(line.strip())
@@ -411,7 +421,7 @@ def span_bold(tag, text, ctx):
 
 def span_embed(tag, text, ctx):
   'convert an embed span into html.'
-  if ctx.emit_dependencies:
+  if ctx.dependencies is not None:
     ctx.dependencies.append(text)
     return ''
   try:
