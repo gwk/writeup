@@ -20,8 +20,8 @@ def main():
   args = arg_parser.parse_args()
 
   # paths.
-  if not (args.src_path or args.src_path is None): failF('src_path cannot be empty string')
-  if not (args.dst_path or args.dst_path is None): failF('dst_path cannot be empty string')
+  if args.src_path == '': failF('src_path cannot be empty string')
+  if args.dst_path == '': failF('dst_path cannot be empty string')
 
   f_in  = open(args.src_path) if args.src_path else stdin
   f_out = open(args.dst_path, 'w') if args.dst_path else stdout
