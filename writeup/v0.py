@@ -27,7 +27,7 @@ def main():
   f_out = open(args.dst_path, 'w') if args.dst_path else stdout
   src_lines = iter(f_in)
 
-  src_path = (args.src_path or '(stdin)')
+  src_path = (args.src_path or '<stdin>')
 
   if args.print_dependencies:
     dependencies = writeup_dependencies(
