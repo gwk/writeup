@@ -547,7 +547,7 @@ body footer {
   margin: 1rem 0 0 0;
 }
 code {
-  background-color: rgba(0xF0, 0xF0, 0xF0, 0.2);
+  background-color: rgb(240, 240, 240);
   border-radius: 3px;
   font-family: source code pro, menlo, terminal, monospace;
 }
