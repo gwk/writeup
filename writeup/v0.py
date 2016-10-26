@@ -240,14 +240,9 @@ def writeup_line(ctx: Ctx, line_num: int, line: str, prev_state: int, state: int
 
   # Some transitions between states result in actions.
 
-  if prev_state == s_list:
-    if state != s_list: transition_from_list(ctx)
-
-  elif prev_state == s_code:
-    if state != s_code: transition_from_code(ctx)
-
-  elif prev_state == s_quote:
-    if state != s_quote: transition_from_quote(ctx)
+  if prev_state == s_list and state != s_list: transition_from_list(ctx)
+  elif prev_state == s_code and state != s_code: transition_from_code(ctx)
+  elif prev_state == s_quote and state != s_quote: transition_from_quote(ctx)
 
   elif prev_state == s_text:
     if state == s_text:
