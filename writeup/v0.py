@@ -7,13 +7,13 @@ from argparse import ArgumentParser
 from html import escape as html_escape
 from os.path import dirname as dir_name, exists as path_exists, join as path_join
 from sys import stdin, stdout, stderr
-from typing import Callable, Iterable, List, Optional, Union
+from typing import Any, Callable, Iterable, List, Optional, Sequence, Union, Tuple
 
 
 __all__ = ['main', 'writeup', 'writeup_dependencies']
 
 
-def main():
+def main() -> None:
   arg_parser = ArgumentParser(description='convert .wu files to html')
   arg_parser.add_argument('src_path', nargs='?', help='input .wu source path (defaults to stdin)')
   arg_parser.add_argument('dst_path', nargs='?', help='output .html path (defaults to stdout)')
@@ -49,7 +49,7 @@ def main():
       print(line, file=f_out)
 
 
-def writeup(src_path, src_lines, title, description, author, css, js):
+def writeup(src_path: str, src_lines: Iterable[str], title: str, description: str, author: str, css: str, js: str) -> List[str]:
   'generate a complete html document from a writeup file (or stream of lines).'
 
   html_lines = ['''\
@@ -75,12 +75,12 @@ def writeup(src_path, src_lines, title, description, author, css, js):
   return html_lines
 
 
-def writeup_dependencies(src_path, src_lines, dir_names=None):
+def writeup_dependencies(src_path: str, src_lines: Iterable[str], dir_names: Optional[List[Any]] = None) -> List[str]:
   '''
   Return a list of dependencies from the writeup in `src_lines`.
   `dir_names` is an ignored argument passed by the external `muck` tool.
   '''
-  dependencies = []
+  dependencies = [] # type: List[str]
   writeup_body(
     out_lines=None,
     out_dependencies=dependencies,
@@ -105,10 +105,10 @@ state_letters = '_©SLQCBTE'
 
 matchers = [
   (s_section, re.compile(r'(#+)(\s*)(.*)\n')),
-  (s_list, re.compile(r'(\s*)\*(\s*)(.*)\n')),
-  (s_quote, re.compile(r'> (.*\n)')),
-  (s_code, re.compile(r'\| (.*)\n')),
-  (s_blank, re.compile(r'(\s*)\n')),
+  (s_list,    re.compile(r'(\s*)\*(\s*)(.*)\n')),
+  (s_quote,   re.compile(r'> (.*\n)')),
+  (s_code,    re.compile(r'\| (.*)\n')),
+  (s_blank,   re.compile(r'(\s*)\n')),
 ]
 
 # span regexes.
@@ -126,21 +126,20 @@ span_pat = r'<((?:[^\\>]|\\>|\\\\)*)>'
 span_esc_re = re.compile(r'\\>|\\\\') # escapes span strings.
 
 
+def dummy_fn(fmt, *items):
+  'Never called; used as an initialization placeholder for Ctx.warn and Ctx.error.'
+  raise Exception('unreachable')
+
+
 class Ctx:
   '''
-  Structure for contextual information needed by a variety of functions.
+  Structure for contextual information needed by a variety of functions called from `writeup_body`.
   '''
-  def __init__(self, src_path: str, out: Callable[..., None], error: Callable[..., None], dependencies: Optional[list]) -> None:
+  def __init__(self, src_path: str, out: Callable[..., None], dependencies: Optional[list]) -> None:
     self.src_path = src_path
     self.src_dir = dir_name(src_path) or '.'
     self.out = out
-    self.error = error
     self.dependencies = dependencies
-
-
-class LineState:
-  'State variables used by `writeup_line`.'
-  def __init__(self) -> None:
     self.section_ids = [] # type: List[str] # accumulated list of all section ids.
     self.paging_ids = [] # type: List[str] # accumulated list of all paging (level 1 & 2) section ids.
     self.section_stack = [] # type: List[int] # stack of currently open sections.
@@ -149,10 +148,17 @@ class LineState:
     self.pre_lines = [] # type: List[str]
     self.quote_line_num = 0
     self.quote_lines = [] # type: List[str]
+    self.line_num = 0 # updated per line.
+    self.warn = dummy_fn # type: Callable[..., None] # updated per line.
+    self.error = dummy_fn # type: Callable[..., None] # updated per line.
+
+  @property
+  def section_depth(self) -> int:
+    return len(self.section_stack)
 
 
 def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
-  src_path: str, src_lines: Iterable[str], line_offset=0, is_versioned=True, dependency_map=None):
+  src_path: str, src_lines: Iterable[str], line_offset=0, is_versioned=True, dependency_map=None) -> None:
   'Convert input writeup in `src_lines` to output html lines and dependencies.'
 
   if out_lines is None:
@@ -162,167 +168,10 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
       s = ' ' * (depth * 2) + ''.join(items)
       out_lines.append(s)
 
-  ls = LineState()
-
-  def dummy_error_fn(fmt, *items): raise Exception('unreachable')
-  # This is a little weird, but we start with a dummy error reporting function, then update it for every line.
-
-  ctx = Ctx(src_path=src_path, out=out, error=dummy_error_fn, dependencies=out_dependencies)
-
-  #ctx: Ctx, ls: LineState,
-  def writeup_line(line_num: int, line: str, prev_state: int, state: int, groups):
-    'Inner function to process a line.'
-
-    section_depth = len(ls.section_stack)
-
-    #errF('{:03} {}{}: {}', line_num, state_letters[prev_state], state_letters[state], line)
-
-    def warn(fmt, *items):
-      errFL('writeup warning: {}: line {}: ' + fmt, src_path, line_num + 1, *items)
-      errFL("  '{}'", repr(line))
-
-    def error(fmt, *items):
-      failF('writeup error: {}: line {}: ' + fmt, src_path, line_num + 1, *items)
-
-    ctx.error = error
-
-    def check_whitespace(len_exp, string, msg_suffix=''):
-      for i, c in enumerate(string):
-        if c != ' ':
-          warn("invalid whitespace character at position {}{}: {}",
-            i + 1, msg_suffix, repr(c))
-          return False
-      if len_exp >= 0 and len(string) != len_exp:
-        warn('expected exactly {} space{}{}; found: {}',
-          len_exp, '' if len_exp == 1 else 's', msg_suffix, len(string))
-        return False
-      return True
-
-    # transition.
-
-    if prev_state == s_start:
-      pass
-    elif prev_state == s_license:
-      pass
-    elif prev_state == s_section:
-      pass
-
-    elif prev_state == s_list:
-      if state != s_list:
-        for i in range(ls.list_depth, 0, -1):
-          out(section_depth + (i - 1), '</ul>')
-        ls.list_depth = 0
-
-    elif prev_state == s_code:
-      if state != s_code:
-        # a newline after the open tag looks ok,
-        # but a final newline between pre content and the close tag looks bad.
-        # therefore we must take care to format the pre contents without a final newline.
-        out(0, '<pre>\n{}</pre>'.format('\n'.join(ls.pre_lines)))
-        ls.pre_lines.clear()
-
-    elif prev_state == s_quote:
-      if state != s_quote:
-        out(section_depth, '<blockquote>')
-        quoted_lines = [] # type: List[str]
-        writeup_body(
-          out_lines=quoted_lines,
-          out_dependencies=out_dependencies,
-          src_path=src_path,
-          src_lines=ls.quote_lines,
-          line_offset=ls.quote_line_num,
-          is_versioned=False)
-        for ql in quoted_lines:
-          out(section_depth + 1, ql)
-        out(section_depth, '</blockquote>')
-        ls.quote_lines.clear()
-
-    elif prev_state == s_blank:
-      pass
-
-    elif prev_state == s_text:
-      if state == s_text:
-        out(section_depth, '<br />')
-      else:
-        out(section_depth, '</p>')
-
-    else:
-      error('bad prev_state: {}', prev_state)
-
-    # output text.
-
-    if state == s_section:
-      hashes, spaces, text = groups
-      check_whitespace(1, spaces)
-      depth = len(hashes)
-      h_num = min(6, depth)
-      prev_index = 0
-      while len(ls.section_stack) >= depth: # close previous peer section and its children.
-        sid = '.'.join(str(i) for i in ls.section_stack)
-        prev_index = ls.section_stack.pop()
-        out(len(ls.section_stack), '</section>') # <!--s{}-->'.format(sid))
-      while len(ls.section_stack) < depth: # open new section and any children.
-        index = prev_index + 1
-        ls.section_stack.append(index)
-        d = len(ls.section_stack)
-        sid = '.'.join(str(i) for i in ls.section_stack)
-        out(d - 1, '<section class="S{}" id="s{}">'.format(d, sid))
-        prev_index = 0
-      # current.
-      out(depth, '<h{} id="h{}">{}</h{}>'.format(h_num, sid, convert_text(text, ctx), h_num))
-      ls.section_ids.append(sid)
-      if depth <= 2:
-        ls.paging_ids.append(sid)
-
-    elif state == s_list:
-      indents, spaces, text = groups
-      check_whitespace(-1, indents, ' in indent')
-      l = len(indents)
-      if l % 2:
-        warn('odd indentation: {}', l)
-      depth = l // 2 + 1
-      check_whitespace(1, spaces, ' following dash')
-      for i in range(ls.list_depth, depth, -1):
-        out(section_depth + (i - 1), '</ul>')
-      for i in range(ls.list_depth, depth):
-        out(section_depth + i, '<ul class="L{}">'.format(i + 1))
-      out(section_depth + depth, '<li>{}</li>'.format(convert_text(text, ctx)))
-      ls.list_depth = depth
-
-    elif state == s_code:
-      text, = groups
-      ls.pre_lines.append(html_esc(text))
-
-    elif state == s_quote:
-      quoted_line, = groups
-      if state != s_quote:
-        ls.quote_line_num = line_num
-      ls.quote_lines.append(quoted_line) # not converted here; text is fully transformed later.
-
-    elif state == s_blank:
-      spaces, = groups
-      if len(spaces):
-        warn('blank line is not empty')
-
-    elif state == s_text:
-      # TODO: check for strange characters that html will ignore.
-      if not line.endswith('\n'):
-        warn("missing newline ('\\n')")
-      text = line.strip()
-      if prev_state != s_text:
-        out(section_depth, '<p>')
-      out(section_depth + 1, convert_text(text, ctx))
-
-    elif state == s_end:
-      for i in range(section_depth, 0, -1):
-        out(i - 1, '</section>')
-      if ls.license_lines:
-        out(0, '<footer id="footer">\n', '<br />\n'.join(ls.license_lines), '\n</footer>')
-
-    else:
-      error('bad state: {}', state)
-
+  ctx = Ctx(src_path=src_path, out=out, dependencies=out_dependencies)
   iter_src_lines = iter(src_lines)
+
+  # Handle version line.
   if is_versioned:
     try:
       version_line = next(iter_src_lines)
@@ -336,23 +185,24 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
     if version != 0: failF('unsupported version number: {}', version)
     line_offset += 1
 
+  # Iterate over lines.
   prev_state = s_start
   line_num = 0
   for line_num, line in enumerate(iter_src_lines, line_offset):
     # any license notice at top gets moved to a footer at the bottom of the html.
     if prev_state == s_start and license_re.fullmatch(line):
-      ls.license_lines.append(line.strip())
+      ctx.license_lines.append(line.strip())
       prev_state = s_license
       continue
     if prev_state == s_license: # consume remaining license lines.
       l = line.strip()
       if l: # not empty.
-        ls.license_lines.append(l)
+        ctx.license_lines.append(l)
         continue # remain in s_license.
 
     # license has ended; determine state.
     state = s_text # default if no patterns match.
-    groups = None
+    groups = (line,) # type: Sequence[str] # hack for output_text.
     for s, r in matchers:
       m = r.fullmatch(line)
       if m:
@@ -360,20 +210,181 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
         groups = m.groups()
         break
 
-    writeup_line(line_num, line, prev_state, state, groups)
+    writeup_line(ctx=ctx, line_num=line_num, line=line, prev_state=prev_state, state=state, groups=groups)
     prev_state = state
 
-  # finish.
-  writeup_line(line_num + 1, '\n', prev_state, s_end, None)
+  # Finish.
+  writeup_line(ctx=ctx, line_num=line_num + 1, line='\n', prev_state=prev_state, state=s_end, groups=None)
 
-  # generate tables.
+  # Generate tables.
   out(0, '<script type="text/javascript"> "use strict";')
-  out(0, 'section_ids = [{}];'.format(','.join("'s{}'".format(sid) for sid in ls.section_ids)))
-  out(0, "paging_ids = ['body', {}];".format(','.join("'s{}'".format(pid) for pid in ls.paging_ids)))
+  out(0, 'section_ids = [{}];'.format(','.join("'s{}'".format(sid) for sid in ctx.section_ids)))
+  out(0, "paging_ids = ['body', {}];".format(','.join("'s{}'".format(pid) for pid in ctx.paging_ids)))
   out(0, '</script>')
 
 
-def convert_text(text, ctx):
+def writeup_line(ctx: Ctx, line_num: int, line: str, prev_state: int, state: int, groups) -> None:
+  'Inner function to process a line.'
+
+  #errF('{:03} {}{}: {}', line_num, state_letters[prev_state], state_letters[state], line)
+
+  def warn(fmt, *items):
+    errFL('writeup warning: {}: line {}: ' + fmt, src_path, line_num + 1, *items)
+    errFL("  '{}'", repr(line))
+
+  def error(fmt, *items):
+    failF('writeup error: {}: line {}: ' + fmt, src_path, line_num + 1, *items)
+
+  ctx.error = error
+
+  if not line.endswith('\n'):
+    warn("missing newline ('\\n')")
+
+  # Some transitions between states result in actions.
+
+  if prev_state == s_list:
+    if state != s_list: transition_from_list(ctx)
+
+  elif prev_state == s_code:
+    if state != s_code: transition_from_code(ctx)
+
+  elif prev_state == s_quote:
+    if state != s_quote: transition_from_quote(ctx)
+
+  elif prev_state == s_text:
+    if state == s_text:
+      ctx.out(ctx.section_depth, '<br />')
+    else:
+      ctx.out(ctx.section_depth, '</p>')
+
+  # output text.
+  is_first = (prev_state != state)
+
+  if state == s_section: output_section(ctx, groups, is_first)
+  elif state == s_list: output_list(ctx, groups, is_first)
+  elif state == s_code: output_code(ctx, groups, is_first)
+  elif state == s_quote: output_quote(ctx, groups, is_first)
+  elif state == s_blank: output_blank(ctx, groups, is_first)
+  elif state == s_text: output_text(ctx, groups, is_first)
+  elif state == s_end: output_end(ctx, groups, is_first)
+  else: error('bad state: {}', state)
+
+
+def transition_from_list(ctx: Ctx) -> None:
+  for i in range(ctx.list_depth, 0, -1):
+    ctx.out(ctx.section_depth + (i - 1), '</ul>')
+  ctx.list_depth = 0
+
+
+def transition_from_code(ctx: Ctx) -> None:
+  # a newline after the open tag looks ok,
+  # but a final newline between pre content and the close tag looks bad.
+  # therefore we must take care to format the pre contents without a final newline.
+  ctx.out(0, '<pre>\n{}</pre>'.format('\n'.join(ctx.pre_lines)))
+  ctx.pre_lines.clear()
+
+
+def transition_from_quote(ctx: Ctx) -> None:
+  ctx.out(ctx.section_depth, '<blockquote>')
+  quoted_lines = [] # type: List[str]
+  writeup_body(
+    out_lines=quoted_lines,
+    out_dependencies=ctx.dependencies,
+    src_path=ctx.src_path,
+    src_lines=ctx.quote_lines,
+    line_offset=ctx.quote_line_num,
+    is_versioned=False)
+  for ql in quoted_lines:
+    ctx.out(ctx.section_depth + 1, ql)
+  ctx.out(ctx.section_depth, '</blockquote>')
+  ctx.quote_lines.clear()
+
+
+def output_section(ctx: Ctx, groups: Sequence[str], is_first: bool):
+  hashes, spaces, text = groups
+  check_whitespace(ctx.warn, 1, spaces)
+  depth = len(hashes)
+  h_num = min(6, depth)
+  prev_index = 0
+  while len(ctx.section_stack) >= depth: # close previous peer section and its children.
+    sid = '.'.join(str(i) for i in ctx.section_stack)
+    prev_index = ctx.section_stack.pop()
+    ctx.out(len(ctx.section_stack), '</section>') # <!--s{}-->'.format(sid))
+  while len(ctx.section_stack) < depth: # open new section and any children.
+    index = prev_index + 1
+    ctx.section_stack.append(index)
+    d = len(ctx.section_stack)
+    sid = '.'.join(str(i) for i in ctx.section_stack)
+    ctx.out(d - 1, '<section class="S{}" id="s{}">'.format(d, sid))
+    prev_index = 0
+  # current.
+  ctx.out(depth, '<h{} id="h{}">{}</h{}>'.format(h_num, sid, convert_text(ctx, text), h_num))
+  ctx.section_ids.append(sid)
+  if depth <= 2:
+    ctx.paging_ids.append(sid)
+
+
+def output_list(ctx: Ctx, groups: Sequence[str], is_first: bool):
+  indents, spaces, text = groups
+  check_whitespace(ctx, -1, indents, ' in indent')
+  l = len(indents)
+  if l % 2:
+    ctx.warn('odd indentation: {}', l)
+  depth = l // 2 + 1
+  check_whitespace(ctx, 1, spaces, ' following dash')
+  for i in range(ctx.list_depth, depth, -1):
+    ctx.out(ctx.section_depth + (i - 1), '</ul>')
+  for i in range(ctx.list_depth, depth):
+    ctx.out(ctx.section_depth + i, '<ul class="L{}">'.format(i + 1))
+  ctx.out(ctx.section_depth + depth, '<li>{}</li>'.format(convert_text(ctx, text)))
+  ctx.list_depth = depth
+
+
+def output_code(ctx: Ctx, groups: Sequence[str], is_first: bool):
+  text, = groups
+  ctx.pre_lines.append(html_esc(text))
+
+
+def output_quote(ctx: Ctx, groups: Sequence[str], is_first: bool):
+  quoted_line, = groups
+  if is_first:
+    ctx.quote_line_num = ctx.line_num
+  ctx.quote_lines.append(quoted_line) # not converted here; text is fully transformed later.
+
+
+def output_text(ctx: Ctx, groups: Sequence[str], is_first: bool):
+  # TODO: check for strange characters that html will ignore.
+  text, = groups
+  if is_first:
+    ctx.out(ctx.section_depth, '<p>')
+  ctx.out(ctx.section_depth + 1, convert_text(ctx, text))
+
+
+def output_blank(ctx: Ctx, groups: Sequence[str], is_first: bool):
+  spaces, = groups
+  if len(spaces): ctx.warn('blank line is not empty')
+
+
+def output_end(ctx: Ctx, groups: Sequence[str], is_first: bool):
+  for i in range(ctx.section_depth, 0, -1):
+    ctx.out(i - 1, '</section>')
+  if ctx.license_lines:
+    ctx.out(0, '<footer id="footer">\n', '<br />\n'.join(ctx.license_lines), '\n</footer>')
+
+
+def check_whitespace(ctx, len_exp, string, msg_suffix=''):
+  for i, c in enumerate(string):
+    if c != ' ':
+      ctx.warn("invalid whitespace character at position {}{}: {}", i + 1, msg_suffix, repr(c))
+      return False
+  if len_exp >= 0 and len(string) != len_exp:
+    ctx.warn('expected exactly {} space{}{}; found: {}',
+      len_exp, ('' if len_exp == 1 else 's'), msg_suffix, len(string))
+    return False
+  return True
+
+
+def convert_text(ctx: Ctx, text: str):
   'convert writeup span elements in a text string to html.'
   converted = []
   prev_idx = 0
@@ -385,25 +396,25 @@ def convert_text(text, ctx):
     for i, (pattern, fn) in enumerate(span_kinds, 1): # groups are 1-indexed.
       group = m.group(i)
       if group is not None:
-        converted.append(fn(group, ctx))
+        converted.append(fn(ctx, group))
         break
   if prev_idx < len(text):
     converted.append(html_esc(text[prev_idx:]))
   return ''.join(converted)
 
 
-def span_conv(text, ctx):
+def span_conv(ctx: Ctx, text: str):
   'convert generic angle bracket span to html.'
   tag, colon, body = text.partition(':')
-  if colon is None: error('malformed span is missing colon after tag: `{}`'.format(text))
+  if colon is None: ctx.error('malformed span is missing colon after tag: `{}`'.format(text))
   try:
     f = span_dispatch[tag]
   except KeyError:
     ctx.error('span has invalid tag: `{}`'.format(tag))
-  return f(tag, body.strip(), ctx)
+  return f(ctx, tag, body.strip())
 
 
-def span_code_conv(text, ctx):
+def span_code_conv(ctx: Ctx, text: str):
   'convert backtick code span to html.'
   span_char_esc_fn = lambda m: m.group(0)[1:] # strip leading '\' escape.
   text_escaped = span_code_esc_re.sub(span_char_esc_fn, text)
@@ -424,11 +435,11 @@ span_re = re.compile('|'.join(p for p, f in span_kinds))
 
 # generic angle bracket spans.
 
-def span_bold(tag, text, ctx):
+def span_bold(ctx: Ctx, tag: str, text: str):
   'convert a bold span into html.'
   return '<b>{}</b>'.format(html_esc(text))
 
-def span_embed(tag, text, ctx):
+def span_embed(ctx: Ctx, tag: str, text: str):
   'convert an embed span into html.'
   if ctx.dependencies is not None:
     ctx.dependencies.append(text)
@@ -441,7 +452,7 @@ def span_embed(tag, text, ctx):
   except FileNotFoundError:
     ctx.error('embedded file not found: {}; path: {}', text, path)
 
-def span_link(tag, text, ctx):
+def span_link(ctx: Ctx, tag: str, text: str):
   'convert a link span into html.'
   words = text.split()
   if not words:
@@ -465,22 +476,22 @@ span_dispatch = {
 
 # HTML escaping.
 
-def html_esc(text):
+def html_esc(text: str):
   return html_escape(text, quote=False)
 
-def html_esc_attr(text):
+def html_esc_attr(text: str):
   return html_escape(text, quote=True)
 
 
 # Error reporting.
 
-def errF(fmt, *items):
+def errF(fmt: str, *items):
   print(fmt.format(*items), end='', file=stderr)
 
-def errFL(fmt, *items):
+def errFL(fmt: str, *items):
   print(fmt.format(*items), file=stderr)
 
-def failF(fmt, *items):
+def failF(fmt:str, *items):
   errFL(fmt, *items)
   exit(1)
 
@@ -494,7 +505,7 @@ minify_css_re = re.compile(r'(?<=: )(.+?;)|\s+|/\*.*?\*/', flags=re.S)
 # other choice clauses cause group 1 to hold None.
 # we could do more agressive minification but this is good enough for now.
 
-def minify_css(src):
+def minify_css(src: str):
   chunks = []
   for chunk in minify_css_re.split(src):
     if chunk: # discard empty chunks and splits that are None (not captured).
