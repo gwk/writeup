@@ -18,6 +18,9 @@ def main() -> None:
   arg_parser.add_argument('src_path', nargs='?', help='input .wu source path (defaults to stdin)')
   arg_parser.add_argument('dst_path', nargs='?', help='output .html path (defaults to stdout)')
   arg_parser.add_argument('-print-dependencies', action='store_true')
+  arg_parser.add_argument('-no-css', action='store_true')
+  arg_parser.add_argument('-no-js', action='store_true')
+  arg_parser.add_argument('-bare', action='store_true')
   args = arg_parser.parse_args()
 
   if args.src_path == '': failF('src_path cannot be empty string')
@@ -33,42 +36,47 @@ def main() -> None:
       src_lines=f_in)
     for dep in dependencies:
       print(dep, file=f_out)
+
   else:
-    css = minify_css(default_css)
     html_lines = writeup(
       src_path=src_path,
       src_lines=f_in,
       title=src_path, # TODO.
       description='',
       author='',
-      css=css,
-      js=js)
+      css=(None if args.bare or args.no_css else minify_css(default_css)),
+      js=(None if args.bare or args.no_js else minify_js(default_js)),
+    )
     for line in html_lines:
       print(line, file=f_out)
 
 
-def writeup(src_path: str, src_lines: Iterable[str], title: str, description: str, author: str, css: str, js: str) -> List[str]:
+def writeup(src_path: str, src_lines: Iterable[str], title: str, description: str, author: str,
+  css: Optional[str], js: Optional[str]) -> List[str]:
   'generate a complete html document from a writeup file (or stream of lines).'
 
-  html_lines = ['''\
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>{title}</title>
-  <meta name="description" content="{description}">
-  <meta name="author" content="{author}">
-  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
-  <style type="text/css">{css}</style>
-  <script type="text/javascript"> "use strict";{js}</script>
-</head>
-<body id="body">\
-'''.format(title=title, description=description, author=author, css=css, js=js)]
+  html_lines = [
+    '<html>',
+    '<head>',
+    '  <meta charset="utf-8">',
+    '  <title>{}</title>'.format(title),
+    '  <meta name="description" content="{}">'.format(description),
+    '  <meta name="author" content="{}">'.format(author),
+    '  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">', # empty icon.
+  ]
+  if css is not None:
+    html_lines.append('  <style type="text/css">{}</style>'.format(css))
+  if js is not None:
+    html_lines.append('  <script type="text/javascript"> "use strict";{}</script>'.format(js))
+  html_lines.append('</head>')
+  html_lines.append('<body id="body">')
 
   writeup_body(
     out_lines=html_lines,
     out_dependencies=None,
     src_path=src_path,
-    src_lines=src_lines)
+    src_lines=src_lines,
+    emit_js=bool(js))
   html_lines.append('</body>\n</html>')
   return html_lines
 
@@ -83,7 +91,8 @@ def writeup_dependencies(src_path: str, src_lines: Iterable[str], dir_names: Opt
     out_lines=None,
     out_dependencies=dependencies,
     src_path=src_path,
-    src_lines=src_lines)
+    src_lines=src_lines,
+    emit_js=False)
   dependencies.sort()
   return dependencies
 
@@ -133,11 +142,13 @@ class Ctx:
   '''
   Structure for contextual information needed by a variety of functions called from `writeup_body`.
   '''
-  def __init__(self, src_path: str, out: Callable[..., None], dependencies: Optional[list]) -> None:
+  def __init__(self, src_path: str, out: Callable[..., None], dependencies: Optional[list],
+    emit_js: bool, line_offset: int, quote_depth: int) -> None:
     self.src_path = src_path
     self.src_dir = dir_name(src_path) or '.'
     self.out = out
     self.dependencies = dependencies
+    self.quote_depth = quote_depth
     self.section_ids = [] # type: List[str] # accumulated list of all section ids.
     self.paging_ids = [] # type: List[str] # accumulated list of all paging (level 1 & 2) section ids.
     self.section_stack = [] # type: List[int] # stack of currently open sections.
@@ -156,7 +167,8 @@ class Ctx:
 
 
 def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
-  src_path: str, src_lines: Iterable[str], line_offset=0, is_versioned=True, dependency_map=None) -> None:
+  src_path: str, src_lines: Iterable[str], emit_js: bool, is_versioned=True,
+  line_offset=0, quote_depth=0) -> None:
   'Convert input writeup in `src_lines` to output html lines and dependencies.'
 
   if out_lines is None:
@@ -166,7 +178,8 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
       s = ' ' * (depth * 2) + ''.join(items)
       out_lines.append(s)
 
-  ctx = Ctx(src_path=src_path, out=out, dependencies=out_dependencies)
+  ctx = Ctx(src_path=src_path, out=out, dependencies=out_dependencies, emit_js=emit_js,
+   line_offset=line_offset, quote_depth=quote_depth)
   iter_src_lines = iter(src_lines)
 
   # Handle version line.
@@ -214,11 +227,12 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
   # Finish.
   writeup_line(ctx=ctx, line_num=line_num + 1, line='\n', prev_state=prev_state, state=s_end, groups=None)
 
-  # Generate tables.
-  out(0, '<script type="text/javascript"> "use strict";')
-  out(0, 'section_ids = [{}];'.format(','.join("'s{}'".format(sid) for sid in ctx.section_ids)))
-  out(0, "paging_ids = ['body', {}];".format(','.join("'s{}'".format(pid) for pid in ctx.paging_ids)))
-  out(0, '</script>')
+  if emit_js:
+    # Generate tables.
+    out(0, '<script type="text/javascript"> "use strict";')
+    out(0, 'section_ids = [{}];'.format(','.join("'s{}'".format(sid) for sid in ctx.section_ids)))
+    out(0, "paging_ids = ['body', {}];".format(','.join("'s{}'".format(pid) for pid in ctx.paging_ids)))
+    out(0, '</script>')
 
 
 def writeup_line(ctx: Ctx, line_num: int, line: str, prev_state: int, state: int, groups) -> None:
@@ -286,7 +300,9 @@ def transition_from_quote(ctx: Ctx) -> None:
     src_path=ctx.src_path,
     src_lines=ctx.quote_lines,
     line_offset=ctx.quote_line_num,
-    is_versioned=False)
+    is_versioned=False,
+    emit_js=False,
+    quote_depth=ctx.quote_depth + 1)
   for ql in quoted_lines:
     ctx.out(ctx.section_depth + 1, ql)
   ctx.out(ctx.section_depth, '</blockquote>')
@@ -308,7 +324,8 @@ def output_section(ctx: Ctx, groups: Sequence[str], is_first: bool):
     ctx.section_stack.append(index)
     d = ctx.section_depth
     sid = '.'.join(str(i) for i in ctx.section_stack)
-    ctx.out(d - 1, '<section class="S{}" id="s{}">'.format(d, sid))
+    quote_prefix = 'q{}'.format(ctx.quote_depth) if ctx.quote_depth else ''
+    ctx.out(d - 1, '<section class="S{}" id="{}s{}">'.format(d, quote_prefix, sid))
     prev_index = 0
   # current.
   ctx.out(depth, '<h{} id="h{}">{}</h{}>'.format(h_num, sid, convert_text(ctx, text), h_num))
@@ -342,7 +359,7 @@ def output_quote(ctx: Ctx, groups: Sequence[str], is_first: bool):
   quoted_line, = groups
   if is_first:
     ctx.quote_line_num = ctx.line_num
-  ctx.quote_lines.append(quoted_line) # not converted here; text is fully transformed later.
+  ctx.quote_lines.append(quoted_line) # not converted here; text is fully transformed by transition_from_quote.
 
 
 def output_text(ctx: Ctx, groups: Sequence[str], is_first: bool):
@@ -592,7 +609,12 @@ ul > ul {
 '''
 
 
-js = '''
+# Javascript.
+
+def minify_js(js):
+  return js
+
+default_js = '''
 function scrollToElementId(id) {
   window.scrollTo(0, document.getElementById(id).offsetTop);
 }
