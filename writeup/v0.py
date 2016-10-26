@@ -5,7 +5,7 @@ import re
 
 from argparse import ArgumentParser
 from html import escape as html_escape
-from os.path import dirname as dir_name, exists as path_exists, join as path_join
+from os.path import dirname as dir_name, exists as path_exists, join as path_join, splitext as split_ext
 from sys import stdin, stdout, stderr
 from typing import Any, Callable, Iterable, List, Optional, Sequence, Union, Tuple
 
@@ -286,9 +286,9 @@ def finish_list(ctx: Ctx) -> None:
 
 
 def finish_code(ctx: Ctx) -> None:
-  # a newline after the open tag looks ok,
-  # but a final newline between pre content and the close tag looks bad.
-  # therefore we must take care to format the pre contents without a final newline.
+  # a newline after the `pre` open tag looks ok,
+  # but a final newline between content and the `pre` close tag looks bad.
+  # therefore we must take care to format the contents without a final newline.
   ctx.out(0, '<pre>\n{}</pre>'.format('\n'.join(ctx.pre_lines)))
   ctx.pre_lines.clear()
 
@@ -453,16 +453,20 @@ def span_bold(ctx: Ctx, tag: str, text: str):
 
 def span_embed(ctx: Ctx, tag: str, text: str):
   'convert an embed span into html.'
+  target_path = text
   if ctx.dependencies is not None:
-    ctx.dependencies.append(text)
+    ctx.dependencies.append(target_path)
     return ''
-  try:
-    target_path = text
-    path = target_path if path_exists(target_path) else path_join('_build', target_path)
-    with open(path_join(ctx.src_dir, path)) as f:
-      return f.read()
+  path = target_path if path_exists(target_path) else path_join('_build', target_path)
+  try: f = open(path_join(ctx.src_dir, path))
   except FileNotFoundError:
-    ctx.error('embedded file not found: {}; path: {}', text, path)
+    ctx.error('embedded file not found: {!r}; inferred path: {!r}', target_path, path)
+  ext = split_ext(target_path)[1]
+  try: fn = embed_dispatch[ext]
+  except KeyError:
+    ctx.error('embedded file has unknown extension type: {!r}:', path)
+  return fn(ctx, f)
+
 
 def span_link(ctx: Ctx, tag: str, text: str):
   'convert a link span into html.'
@@ -484,6 +488,49 @@ span_dispatch = {
   'mailto': span_link,
 }
 
+
+def embed_html(ctx, f):
+  return f.read()
+
+
+def embed_csv(ctx, f):
+  from csv import reader
+  csv_reader = reader(f)
+  it = iter(csv_reader)
+  table = ['<table>\n']
+
+  def out(*els): table.extend(els)
+
+  try: header = next(it)
+  except StopIteration: pass
+  else:
+    out('<thead>', '<tr>')
+    for col in header:
+        out('<th>{}</th>'.format(html_esc(col)))
+    out('</tr>', '</thead>\n', '<tbody>\n')
+    for row in it:
+      out('<tr>')
+      for cell in row:
+        out('<td>{}</td>'.format(html_esc(cell)))
+      out('</tr>')
+  out('</tbody>', '</table>\n')
+  return ''.join(table)
+
+
+def embed_txt(ctx, f):
+  return '<pre>\n{}</pre>'.format(f.read())
+
+
+def embed_svg(ctx, f):
+  return f.read()
+
+
+embed_dispatch = {
+  '.html' : embed_html,
+  '.csv' : embed_csv,
+  '.svg' : embed_svg,
+  '.txt' : embed_txt,
+}
 
 
 # HTML escaping.
@@ -592,6 +639,67 @@ section.S6 { margin: 1.0rem 0; }
 section#s1 {
   border-top-width: 0;
 }
+
+
+table {
+  font-family: sans-serif;
+  color:#666;
+  background:#eaebec;
+  margin:16px;
+  border:#ccc 1px solid;
+  border-radius:3px;
+  box-shadow: 0 1px 2px #d1d1d1;
+}
+
+table th {
+  padding:20px 24px 20px 24px;
+  border-top:1px solid #fafafa;
+  border-bottom:1px solid #e0e0e0;
+  background: #ededed;
+}
+table th:first-child {
+  text-align: left;
+  padding-left:20px;
+}
+table tr:first-child th:first-child {
+  border-top-left-radius:3px;
+}
+table tr:first-child th:last-child {
+  border-top-right-radius:3px;
+}
+table tr {
+  text-align: center;
+  padding-left:20px;
+}
+table td:first-child {
+  text-align: left;
+  padding-left:20px;
+  border-left: 0;
+}
+table td {
+  padding:18px;
+  border-top: 1px solid #ffffff;
+  border-bottom:1px solid #e0e0e0;
+  border-left: 1px solid #e0e0e0;
+
+  background: #fafafa;
+}
+table tr.even td {
+  background: #f6f6f6;
+}
+table tr:last-child td {
+  border-bottom:0;
+}
+table tr:last-child td:first-child {
+  border-bottom-left-radius:3px;
+}
+table tr:last-child td:last-child {
+  border-bottom-right-radius:3px;
+}
+table tr:hover td {
+  background: #f2f2f2;
+}
+
 ul {
   line-height: 1.333rem;
   list-style-position: inside;
