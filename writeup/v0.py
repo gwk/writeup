@@ -20,14 +20,12 @@ def main() -> None:
   arg_parser.add_argument('-print-dependencies', action='store_true')
   args = arg_parser.parse_args()
 
-  # paths.
   if args.src_path == '': failF('src_path cannot be empty string')
   if args.dst_path == '': failF('dst_path cannot be empty string')
 
   f_in  = open(args.src_path) if args.src_path else stdin
   f_out = open(args.dst_path, 'w') if args.dst_path else stdout
-
-  src_path = (args.src_path or '<stdin>')
+  src_path = f_in.name
 
   if args.print_dependencies:
     dependencies = writeup_dependencies(
