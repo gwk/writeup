@@ -25,6 +25,7 @@ def main() -> None:
 
   if args.src_path == '': failF('src_path cannot be empty string')
   if args.dst_path == '': failF('dst_path cannot be empty string')
+  if args.src_path == args.dst_path: failF('src_path and dst_path cannot be the same path: {!r}', args.src_path)
 
   f_in  = open(args.src_path) if args.src_path else stdin
   f_out = open(args.dst_path, 'w') if args.dst_path else stdout
