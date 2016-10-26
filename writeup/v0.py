@@ -256,9 +256,9 @@ def writeup_line(ctx: Ctx, line_num: int, line: str, prev_state: int, state: int
 
   # Some transitions between states result in actions.
 
-  if prev_state == s_list and state != s_list: transition_from_list(ctx)
-  elif prev_state == s_code and state != s_code: transition_from_code(ctx)
-  elif prev_state == s_quote and state != s_quote: transition_from_quote(ctx)
+  if prev_state == s_list and state != s_list: finish_list(ctx)
+  elif prev_state == s_code and state != s_code: finish_code(ctx)
+  elif prev_state == s_quote and state != s_quote: finish_quote(ctx)
 
   elif prev_state == s_text:
     if state == s_text:
@@ -279,13 +279,13 @@ def writeup_line(ctx: Ctx, line_num: int, line: str, prev_state: int, state: int
   else: error('bad state: {}', state)
 
 
-def transition_from_list(ctx: Ctx) -> None:
+def finish_list(ctx: Ctx) -> None:
   for i in range(ctx.list_depth, 0, -1):
     ctx.out(ctx.section_depth + (i - 1), '</ul>')
   ctx.list_depth = 0
 
 
-def transition_from_code(ctx: Ctx) -> None:
+def finish_code(ctx: Ctx) -> None:
   # a newline after the open tag looks ok,
   # but a final newline between pre content and the close tag looks bad.
   # therefore we must take care to format the pre contents without a final newline.
@@ -293,7 +293,7 @@ def transition_from_code(ctx: Ctx) -> None:
   ctx.pre_lines.clear()
 
 
-def transition_from_quote(ctx: Ctx) -> None:
+def finish_quote(ctx: Ctx) -> None:
   ctx.out(ctx.section_depth, '<blockquote>')
   quoted_lines = [] # type: List[str]
   writeup_body(
@@ -361,7 +361,7 @@ def output_quote(ctx: Ctx, groups: Sequence[str], is_first: bool):
   quoted_line, = groups
   if is_first:
     ctx.quote_line_num = ctx.line_num
-  ctx.quote_lines.append(quoted_line) # not converted here; text is fully transformed by transition_from_quote.
+  ctx.quote_lines.append(quoted_line) # not converted here; text is fully transformed by finish_quote.
 
 
 def output_text(ctx: Ctx, groups: Sequence[str], is_first: bool):
