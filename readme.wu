@@ -7,8 +7,8 @@ Dedicated to the public domain under CC0: https://creativecommons.org/publicdoma
 Writeup is a text markup format that translates to HTML5. It is similar to Markdown in spirit, but is not equivalent. Some differences:
 * The line-oriented syntax is designed to make correct implementation simple and unambiguous.
 * Hierarchical sections.
-* Special handling of version and license lines at the beginning of a file.
-* Builtin javascript presentation mode.
+* Special handling of leading version and license lines in source files.
+* Builtin Javascript presentation mode.
 * Unambiguous character escape syntaxes.
 * A versioning scheme that will allow for format evolution while preserving the ability to build old source files.
 
@@ -16,51 +16,84 @@ Writeup is a text markup format that translates to HTML5. It is similar to Markd
 All of the source code and documentation is dedicated to the public domain under CC0: https://creativecommons.org/.publicdomain/zero/1.0/.
 
 
+# Usage
+
+Writeup can take 0, 1 or 2 arguments, defaulting to stdout and stdin as follows:
+| $ ./writeup.py <in >out
+| $ ./writeup.py file.wu > out
+| $ ./writeup.py file.wu file.html
+
+| $ writeup -h
+| usage: writeup [-h] [-print-dependencies] [-no-css] [-no-js] [-bare]
+|                [src_path] [dst_path]
+|
+| Converts .wu files to html.
+|
+| positional arguments:
+|   src_path             Input .wu source path; defaults to <stdin>.
+|   dst_path             Output .html path: defaults to <stdout>.
+|
+| optional arguments:
+|   -h, --help           show this help message and exit
+|   -print-dependencies  Print external file dependencies of the input, one per
+|                        line. Does not output HTML.
+|   -no-css              Omit CSS.
+|   -no-js               Omit Javascript.
+|   -bare                Omit all non-HTML output.
+
+
 # Format
 
 Writeup documents consist of:
-* an initial required version line, e.g.: `writeup v0`.
-* optional consecutive copyright/license lines at the beginning of the document, followed by a blank line. Recognized prefixes are:
+* An initial required version line, e.g.: `writeup v0`.
+* Optional consecutive copyright/license lines at the beginning of the document, followed by a blank line. Recognized prefixes are:
   * `©`
   * `Copyright`
   * `Dedicated to the public domain`
-* blank lines, containing only whitespace characters.
-* header lines, beginning with one or more hash `#` characters.
-* list lines, beginning with zero or more pairs of spaces, followed by a dash `-` character.
-* code lines, prefixed with `| `.
-* quote lines, prefixed with `> `.
-* text lines, which are any lines that don't match the above criteria.
+* Blank lines, containing only whitespace characters.
+* Header lines, beginning with one or more `#` (hash) characters.
+* List lines, beginning with zero or more pairs of spaces, followed by a `-` (dash) character.
+* Code lines, prefixed with a `|` (pipe / vertical bar) character.
+* Quote lines, prefixed with `>` (greater than) character.
+* Text lines, which are any lines that don't match the above criteria.
 
 These are translated as follows:
-* line breaks are inserted between text lines.
-* a single blank separates text lines into paragraphs.
-* blank lines close list, code, and quote blocks.
-* a header line denotes a section with a header whose numerical level is indicated by the number of hash symbols.
-  * sections are translated into nested `<section>` elements, containing the appropriate `<h1>` through `<h6>` header elements.
-  * sections can be nested arbitrarily deeply, but beyond 6 levels will all produce `h6` tags, the maximum supported by HTML5.
+* Line breaks are inserted between text lines.
+* Groups of consecutive lines are grouped into paragraphs.
+* A blank separates text lines into paragraphs.
+* A header line denotes a section with a header whose numerical level is indicated by the number of hash symbols.
+  * Sections are translated into nested `<section>` elements, containing the appropriate `<h1>` through `<h6>` header elements.
+  * Sections can be nested arbitrarily deeply, but beyond 6 levels will all produce `h6` tags, the maximum supported by HTML5.
 
 There is also support for inline markup:
-* currently only `\`…\`` code markup is implemented.
-* additional markup elements can be added easily:
-  * link syntax (high priority).
-  * italics, bold, strikethrough, additions and deletions, etc.
+* Inline code is quoted with backticks like so: `\`…\``
+  * Literal backticks and backslashes within an inline code span are written by escaping with a backslash: `\\\`` and `\\\\`
+* A generic span syntax also exists: `<tag: …>`, where tag can be one of the following:
+  * `b`: bold text: `<b: bold text>` => <b: bold text>.
+  * `embed`: embed an external file.
+  * `http`, `https`, `mailto`: a link:
+    * If the link is followed by a space and additional words of text, then the text becomes the visible link text.
+    * Example: `<https://github.com/gwk/writeup>` => <https://github.com/gwk/writeup>
+    * Example: `<https://github.com/gwk/writeup writeup>` => <https://github.com/gwk/writeup writeup>
+* More inline markup features need to be added!
+  * italics, strikethrough, edit additions and deletions, etc.
 
 ## Comparison to Markdown
 Writeup differs from Github Flavored Markdown (GFD) substantially; here are some of the more obvious points:
 * Writeup headers create a hierarchical structure of `<section>` blocks in the document; Markdown has a flat structure.
-* the output HTML contains CSS, javascript, and class attributes in order to stand alone; the Github markup system specifically strips this out of documents.
+* By default the output HTML contains CSS, Javascript, and class attributes in order to stand alone; the Github markup system purposefully strips this out of documents.
 * Writeup does not currently support:
-  * italics with `*`, bold with `**`, both with `_`, or strikethrough with `~~`.
-  * link syntax `[http://...](name...)`.
-  * ordered lists.
-  * fenced codeblocks with `\`\`\``; this is redundant with writeup's `|` code blocks.
-  * syntax highlighting (maybe one day…).
-  * tables.
-  * task lists.
-  * domain-specific features like @mentions.
+  * Italics with `*`, bold with `**`, both with `_`, or strikethrough with `~~`.
+  * Markdown link syntax `[http://...](name...)`.
+  * Ordered lists.
+  * Fenced codeblocks with `\`\`\``.
+  * Syntax highlighting (maybe one day…).
+  * Tables.
+  * Task lists.
+  * Domain-specific features like @mentions.
 
 ## Warnings
-Warnings are issued for the following conditions:
+Warnings are issued for the following conditions, including:
 * a blank line is not empty.
 * the final line does not end with a newline character.
 * indentation is an odd number of spaces.
@@ -72,31 +105,23 @@ Warnings are issued for the following conditions:
 All writeup documents require a version line at the beginning of the document, like this:
 | writeup v0
 
-Writeup is currently experimental, and the only version number supported is 0. Once the format appears reasonably stable, then it will be promoted to v1. From then on, if the format changes, then implementations should either recognize and respect or else reject old version numbers.
+Writeup is currently experimental, and the only version number supported is 0. Once the format appears reasonably stable, then it will be promoted to v1. From then on, if the format changes, implementations should either recognize and respect or else reject older documents.
 
 Text snippets submitted to a program can omit the version number; it is the responsibility of the program to track the format version as necessary.
 
 ## Adoption
 If you start using writeup seriously please let me know and I will bump the version number to 1.
 
-
-# Usage
-
-Writeup can take 0, 1 or 2 arguments, defaulting to stdout and stdin as follows:
-| $ ./writeup.py <in >out
-| $ ./writeup.py file.wu > out
-| $ ./writeup.py file.wu file.html
-
 ## Paging
-Writeup HTML contains javascript that facilitates jumping paging across primary and secondary sections using the left and right arrow keys.
+Writeup HTML contains Javascript that facilitates jumping paging across primary and secondary sections using the left and right arrow keys.
 
 ## Presentation Mode
-Writeup HTML files contain css and javascript for both normal and presentation modes. Press `p` in the browser to toggle between modes. Presentation mode simply adds styling to the primary and secondary sections to make them the full window height; in conjunction with the paging mechanism this serves as a simple presentation mechanism.
+Writeup HTML files contain CSS and Javascript for both normal and presentation modes. Press `p` in the browser to toggle between modes. Presentation mode simply adds styling to the primary and secondary sections to make them the full window height; in conjunction with the paging mechanism this lets you use writeup for simple slide decks.
 
 
 # Implementation
 
-Writeup is currently implemented as a python 3.4 script, depending only on the standard library.
+Writeup is currently implemented as a Python 3.5 script, depending only on the standard library.
 
 
 # Examples

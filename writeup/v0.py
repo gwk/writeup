@@ -14,13 +14,14 @@ __all__ = ['main', 'writeup', 'writeup_dependencies']
 
 
 def main() -> None:
-  arg_parser = ArgumentParser(description='convert .wu files to html')
-  arg_parser.add_argument('src_path', nargs='?', help='input .wu source path (defaults to stdin)')
-  arg_parser.add_argument('dst_path', nargs='?', help='output .html path (defaults to stdout)')
-  arg_parser.add_argument('-print-dependencies', action='store_true')
-  arg_parser.add_argument('-no-css', action='store_true')
-  arg_parser.add_argument('-no-js', action='store_true')
-  arg_parser.add_argument('-bare', action='store_true')
+  arg_parser = ArgumentParser(description='Converts .wu files to html.')
+  arg_parser.add_argument('src_path', nargs='?', help='Input .wu source path; defaults to <stdin>.')
+  arg_parser.add_argument('dst_path', nargs='?', help='Output .html path: defaults to <stdout>.')
+  arg_parser.add_argument('-print-dependencies', action='store_true',
+    help='Print external file dependencies of the input, one per line. Does not output HTML.')
+  arg_parser.add_argument('-no-css', action='store_true', help='Omit CSS.')
+  arg_parser.add_argument('-no-js', action='store_true', help='Omit Javascript.')
+  arg_parser.add_argument('-bare', action='store_true', help='Omit all non-HTML output.')
   args = arg_parser.parse_args()
 
   if args.src_path == '': failF('src_path cannot be empty string')
@@ -242,11 +243,11 @@ def writeup_line(ctx: Ctx, line_num: int, line: str, prev_state: int, state: int
   #errF('{:03} {}{}: {}', line_num, state_letters[prev_state], state_letters[state], line)
 
   def warn(fmt, *items):
-    errFL('writeup warning: {}: line {}: ' + fmt, src_path, line_num + 1, *items)
+    errFL('writeup warning: {}: line {}: ' + fmt, ctx.src_path, ctx.line_num + 1, *items)
     errFL("  '{}'", repr(line))
 
   def error(fmt, *items):
-    failF('writeup error: {}: line {}: ' + fmt, src_path, line_num + 1, *items)
+    failF('writeup error: {}: line {}: ' + fmt, ctx.src_path, ctx.line_num + 1, *items)
 
   ctx.error = error
 
