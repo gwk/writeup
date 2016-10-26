@@ -299,14 +299,14 @@ def output_section(ctx: Ctx, groups: Sequence[str], is_first: bool):
   depth = len(hashes)
   h_num = min(6, depth)
   prev_index = 0
-  while len(ctx.section_stack) >= depth: # close previous peer section and its children.
+  while ctx.section_depth >= depth: # close previous peer section and its children.
     sid = '.'.join(str(i) for i in ctx.section_stack)
     prev_index = ctx.section_stack.pop()
-    ctx.out(len(ctx.section_stack), '</section>') # <!--s{}-->'.format(sid))
-  while len(ctx.section_stack) < depth: # open new section and any children.
+    ctx.out(ctx.section_depth, '</section>') # <!--s{}-->'.format(sid))
+  while ctx.section_depth < depth: # open new section and any children.
     index = prev_index + 1
     ctx.section_stack.append(index)
-    d = len(ctx.section_stack)
+    d = ctx.section_depth
     sid = '.'.join(str(i) for i in ctx.section_stack)
     ctx.out(d - 1, '<section class="S{}" id="s{}">'.format(d, sid))
     prev_index = 0
