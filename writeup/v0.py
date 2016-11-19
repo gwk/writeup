@@ -33,6 +33,9 @@ def main() -> None:
   f_out = open(args.dst_path, 'w') if args.dst_path else stdout
   src_path = f_in.name
 
+  if f_in == stdin and f_in.isatty():
+    print('writeup: reading from stdin...', file=stderr)
+
   if args.print_dependencies:
     dependencies = writeup_dependencies(
       src_path=src_path,
