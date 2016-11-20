@@ -644,7 +644,6 @@ section#s1 {
   border-top-width: 0;
 }
 
-
 table {
   font-family: sans-serif;
   color:#666;
@@ -681,7 +680,7 @@ table td:first-child {
   border-left: 0;
 }
 table td {
-  padding:18px;
+  padding:8px;
   border-top: 1px solid #ffffff;
   border-bottom:1px solid #e0e0e0;
   border-left: 1px solid #e0e0e0;
