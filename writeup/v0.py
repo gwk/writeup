@@ -204,8 +204,9 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
 
   # Iterate over lines.
   prev_state = s_start
-  line_num = 0
+  ctx.line_num = line_offset
   for line_num, line in enumerate(iter_src_lines, line_offset):
+    ctx.line_num = line_num
     # any license notice at top gets moved to a footer at the bottom of the html.
     if prev_state == s_start and license_re.fullmatch(line):
       ctx.license_lines.append(line.strip())
@@ -227,11 +228,12 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
         groups = m.groups()
         break
 
-    writeup_line(ctx=ctx, line_num=line_num, line=line, prev_state=prev_state, state=state, groups=groups)
+    writeup_line(ctx=ctx, line=line, prev_state=prev_state, state=state, groups=groups)
     prev_state = state
 
   # Finish.
-  writeup_line(ctx=ctx, line_num=line_num + 1, line='\n', prev_state=prev_state, state=s_end, groups=None)
+  ctx.line_num += 1
+  writeup_line(ctx=ctx, line='\n', prev_state=prev_state, state=s_end, groups=None)
 
   if emit_js:
     # Generate tables.
@@ -241,10 +243,10 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
     out(0, '</script>')
 
 
-def writeup_line(ctx: Ctx, line_num: int, line: str, prev_state: int, state: int, groups) -> None:
+def writeup_line(ctx: Ctx, line: str, prev_state: int, state: int, groups) -> None:
   'Inner function to process a line.'
 
-  #errF('{:03} {}{}: {}', line_num, state_letters[prev_state], state_letters[state], line)
+  #errF('{:03} {}{}: {}', ctx.line_num, state_letters[prev_state], state_letters[state], line)
 
   def warn(fmt, *items):
     errFL('writeup warning: {}: line {}: ' + fmt, ctx.src_path, ctx.line_num + 1, *items)
