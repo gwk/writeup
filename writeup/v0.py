@@ -148,10 +148,10 @@ class Ctx:
   '''
   Structure for contextual information needed by a variety of functions called from `writeup_body`.
   '''
-  def __init__(self, src_path: str, out: Callable[..., None], dependencies: Optional[list],
+  def __init__(self, search_dir: str, src_path: str, out: Callable[..., None], dependencies: Optional[list],
     emit_js: bool, line_offset: int, quote_depth: int) -> None:
+    self.search_dir = search_dir
     self.src_path = src_path
-    self.src_dir = dir_name(src_path) or '.'
     self.out = out
     self.dependencies = dependencies
     self.quote_depth = quote_depth
@@ -184,8 +184,10 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
       s = ' ' * (depth * 2) + ''.join(items)
       out_lines.append(s)
 
-  ctx = Ctx(src_path=src_path, out=out, dependencies=out_dependencies, emit_js=emit_js,
-   line_offset=line_offset, quote_depth=quote_depth)
+  ctx = Ctx(search_dir=dir_name(src_path) or '.',
+   src_path=src_path, out=out, dependencies=out_dependencies,
+   emit_js=emit_js, line_offset=line_offset, quote_depth=quote_depth)
+
   iter_src_lines = iter(src_lines)
 
   # Handle version line.
@@ -459,12 +461,12 @@ def span_bold(ctx: Ctx, tag: str, text: str):
 
 def span_embed(ctx: Ctx, tag: str, text: str):
   'convert an embed span into html.'
-  target_path = text
+  target_path = path_join(ctx.search_dir, text)
   if ctx.dependencies is not None:
     ctx.dependencies.append(target_path)
     return ''
-  path = target_path if path_exists(target_path) else path_join('_build', target_path)
-  try: f = open(path_join(ctx.src_dir, path))
+  actual_path = target_path if path_exists(target_path) else path_join('_build', target_path)
+  try: f = open(actual_path)
   except FileNotFoundError:
     ctx.error('embedded file not found: {!r}; inferred path: {!r}', target_path, path)
   ext = split_ext(target_path)[1]
