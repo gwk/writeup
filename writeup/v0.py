@@ -19,8 +19,9 @@ def main() -> None:
   arg_parser.add_argument('dst_path', nargs='?', help='Output .html path: defaults to <stdout>.')
   arg_parser.add_argument('-print-dependencies', action='store_true',
     help='Print external file dependencies of the input, one per line. Does not output HTML.')
-  arg_parser.add_argument('-no-css', action='store_true', help='Omit CSS.')
-  arg_parser.add_argument('-no-js', action='store_true', help='Omit Javascript.')
+  arg_parser.add_argument('-css', nargs='+', default=(), help='paths to CSS.')
+  arg_parser.add_argument('-no-css', action='store_true', help='Omit default CSS.')
+  arg_parser.add_argument('-no-js', action='store_true', help='Omit default Javascript.')
   arg_parser.add_argument('-bare', action='store_true', help='Omit all non-HTML output.')
   args = arg_parser.parse_args()
 
@@ -43,6 +44,14 @@ def main() -> None:
     for dep in dependencies:
       print(dep, file=f_out)
 
+  css = [] if (args.bare or args.no_css) else [default_css]
+  for path in args.css:
+    try:
+      with open(path) as f:
+        css.append(f.read())
+    except FileNotFoundError:
+      failF('writeup: css file does not exist: {!r}', args.css)
+
   else:
     html_lines = writeup(
       src_path=src_path,
@@ -50,7 +59,7 @@ def main() -> None:
       title=src_path, # TODO.
       description='',
       author='',
-      css=(None if args.bare or args.no_css else minify_css(default_css)),
+      css=minify_css('\n'.join(css)),
       js=(None if args.bare or args.no_js else minify_js(default_js)),
     )
     for line in html_lines:
@@ -70,9 +79,9 @@ def writeup(src_path: str, src_lines: Iterable[str], title: str, description: st
     '  <meta name="author" content="{}">'.format(author),
     '  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">', # empty icon.
   ]
-  if css is not None:
+  if css:
     html_lines.append('  <style type="text/css">{}</style>'.format(css))
-  if js is not None:
+  if js:
     html_lines.append('  <script type="text/javascript"> "use strict";{}</script>'.format(js))
   html_lines.append('</head>')
   html_lines.append('<body id="body">')
