@@ -495,7 +495,30 @@ def span_link(ctx: Ctx, tag: str, text: str):
     visible = link
   else:
     visible = ' '.join(words[1:])
-  return '<a href={}>{}</a>'.format(link, html_esc(visible))
+  return '<a href={}>{}</a>'.format(html_esc_attr(link), html_esc(visible))
+
+
+def span_span(ctx: Ctx, tag: str, text: str):
+  'convert a `span` span into html.'
+  attrs = []
+  body = []
+  found_semicolon = False
+  for word in text.split(' '):
+    if found_semicolon: body.append(word)
+    elif word == ';': found_semicolon = True
+    else:
+      if word.endswith(';'):
+        found_semicolon = True
+        word = word[:-1]
+      key, eq, val = word.partition('=')
+      if not eq: ctx.error('span attribute is missing `=`; word: {!r}', word)
+      if not key.isalnum(): ctx.error('span attribute name is not alphanumeric: {!r}', word)
+      if not val: ctx.error('span attribute value is empty; word: {!r}', word)
+      if val[0] in ('"', "'") and (len(val) < 2 or val[0] != val[-1]):
+        ctx.error('span attribute value has mismatched quotes (possibly due to writeup doing naive splitting on whitespace); word: {!r}; val: {!r}', word, val)
+      attrs.append(word)
+  return '<span {}>{}</span>'.format(' '.join(attrs), ' '.join(body))
+
 
 span_dispatch = {
   'b' : span_bold,
@@ -503,6 +526,7 @@ span_dispatch = {
   'http': span_link,
   'https': span_link,
   'mailto': span_link,
+  'span': span_span,
 }
 
 
