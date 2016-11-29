@@ -455,21 +455,21 @@ def span_code_conv(ctx: Ctx, text: str):
 # span patterns and associated handlers.
 span_kinds = [
   (span_code_pat, span_code_conv),
-  (span_pat, span_conv),
+  (span_pat,      span_conv),
 ]
 
 # single re, wrapping each span sub-pattern in capturing parentheses.
-span_re = re.compile('|'.join(p for p, f in span_kinds))
+span_re = re.compile('|'.join(p for p, _, in span_kinds))
 
 
 # generic angle bracket spans.
 
 def span_bold(ctx: Ctx, tag: str, text: str):
-  'convert a bold span into html.'
+  'convert a `bold` span into html.'
   return '<b>{}</b>'.format(html_esc(text))
 
 def span_embed(ctx: Ctx, tag: str, text: str):
-  'convert an embed span into html.'
+  'convert an `embed` span into html.'
   target_path = path_join(ctx.search_dir, text)
   if ctx.dependencies is not None:
     ctx.dependencies.append(target_path)
@@ -486,7 +486,7 @@ def span_embed(ctx: Ctx, tag: str, text: str):
 
 
 def span_link(ctx: Ctx, tag: str, text: str):
-  'convert a link span into html.'
+  'convert a `link` span into html.'
   words = text.split()
   if not words:
     ctx.error('link is empty: {!r}: {!r}', tag, text)
