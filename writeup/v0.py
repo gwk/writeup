@@ -490,7 +490,7 @@ def span_link(ctx: Ctx, tag: str, text: str):
   words = text.split()
   if not words:
     ctx.error('link is empty: {!r}: {!r}', tag, text)
-  link = '{}:{}'.format(tag, text)
+  link = '{}:{}'.format(tag, words[0])
   if len(words) == 1:
     visible = link
   else:
