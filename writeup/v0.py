@@ -708,7 +708,7 @@ table tr:first-child th:last-child {
   border-top-right-radius:3px;
 }
 table tr {
-  text-align: center;
+  text-align: left;
   padding-left:20px;
 }
 table td:first-child {
