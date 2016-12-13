@@ -261,7 +261,7 @@ def writeup_line(ctx: Ctx, line: str, prev_state: int, state: int, groups) -> No
 
   def warn(fmt, *items):
     errFL('writeup warning: {}: line {}: ' + fmt, ctx.src_path, ctx.line_num + 1, *items)
-    errFL("  '{}'", repr(line))
+    errFL("  {!r}", line)
 
   def error(fmt, *items):
     failF('writeup error: {}: line {}: ' + fmt, ctx.src_path, ctx.line_num + 1, *items)
