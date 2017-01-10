@@ -260,11 +260,11 @@ def writeup_line(ctx: Ctx, line: str, prev_state: int, state: int, groups) -> No
   #errF('{:03} {}{}: {}', ctx.line_num, state_letters[prev_state], state_letters[state], line)
 
   def warn(fmt, *items):
-    errFL('writeup warning: {}: line {}: ' + fmt, ctx.src_path, ctx.line_num + 1, *items)
+    errFL('writeup warning: {}:{}: ' + fmt, ctx.src_path, ctx.line_num + 1, *items)
     errFL("  {!r}", line)
 
   def error(fmt, *items):
-    failF('writeup error: {}: line {}: ' + fmt, ctx.src_path, ctx.line_num + 1, *items)
+    failF('writeup error: {}:{}: ' + fmt, ctx.src_path, ctx.line_num + 1, *items)
 
   ctx.error = error
 
@@ -477,11 +477,11 @@ def span_embed(ctx: Ctx, tag: str, text: str):
   actual_path = target_path if path_exists(target_path) else path_join('_build', target_path)
   try: f = open(actual_path)
   except FileNotFoundError:
-    ctx.error('embedded file not found: {!r}; inferred path: {!r}', target_path, path)
+    ctx.error('embedded file not found: {!r}; inferred path: {!r}', target_path, actual_path)
   ext = split_ext(target_path)[1]
   try: fn = embed_dispatch[ext]
   except KeyError:
-    ctx.error('embedded file has unknown extension type: {!r}:', path)
+    ctx.error('embedded file has unknown extension type: {!r}:', actual_path)
   return fn(ctx, f)
 
 
