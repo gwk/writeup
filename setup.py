@@ -22,7 +22,7 @@ Writeup is a text markup format that translates to HTML5. It is similar to Markd
 setup(
   name='writeup-tool',
   license='CC0',
-  version='0.0.0',
+  version='0.0.1',
   author='George King',
   author_email='george.w.king@gmail.com',
   url='https://github.com/gwk/writeup',
