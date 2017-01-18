@@ -5,7 +5,7 @@ import re
 
 from argparse import ArgumentParser
 from html import escape as html_escape
-from os.path import dirname as dir_name, exists as path_exists, join as path_join, splitext as split_ext
+from os.path import dirname as path_dir, exists as path_exists, join as path_join, splitext as split_ext
 from sys import stdin, stdout, stderr
 from typing import Any, Callable, Iterable, List, Optional, Sequence, Union, Tuple
 
@@ -43,6 +43,7 @@ def main() -> None:
       src_lines=f_in)
     for dep in dependencies:
       print(dep, file=f_out)
+    exit(0)
 
   css = [] if (args.bare or args.no_css) else [default_css]
   for path in args.css:
@@ -193,7 +194,7 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
       s = ' ' * (depth * 2) + ''.join(items)
       out_lines.append(s)
 
-  ctx = Ctx(search_dir=dir_name(src_path) or '.',
+  ctx = Ctx(search_dir=path_dir(src_path) or '.',
    src_path=src_path, out=out, dependencies=out_dependencies,
    emit_js=emit_js, line_offset=line_offset, quote_depth=quote_depth)
 
@@ -471,6 +472,8 @@ def span_bold(ctx: Ctx, tag: str, text: str):
 def span_embed(ctx: Ctx, tag: str, text: str):
   'convert an `embed` span into html.'
   target_path = path_join(ctx.search_dir, text)
+  if target_path.startswith('./'):
+    target_path = target_path[2:]
   if ctx.dependencies is not None:
     ctx.dependencies.append(target_path)
     return ''
