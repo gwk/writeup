@@ -533,10 +533,6 @@ span_dispatch = {
 }
 
 
-def embed_html(ctx, f):
-  return f.read()
-
-
 def embed_csv(ctx, f):
   from csv import reader
   csv_reader = reader(f)
@@ -565,17 +561,25 @@ def embed_txt(ctx, f):
   return '<pre>\n{}</pre>'.format(f.read())
 
 
-def embed_svg(ctx, f):
+embed_dispatch = {
+  '.csv'  : embed_csv,
+  '.txt'  : embed_txt,
+}
+
+def bind_exts(fn, *exts):
+  embed_dispatch.update((ext, fn) for ext in exts)
+
+
+def embed_direct(ctx, f):
   return f.read()
 
 
-embed_dispatch = {
-  '.html' : embed_html,
-  '.csv' : embed_csv,
-  '.svg' : embed_svg,
-  '.txt' : embed_txt,
-}
+def embed_img(ctx, f):
+  return f'<img src={f.name}>'
 
+
+bind_exts(embed_direct, '.htm', '.html', '.svg')
+bind_exts(embed_img, '.gif', '.jpeg', '.jpg', '.png')
 
 # HTML escaping.
 
