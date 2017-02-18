@@ -5,12 +5,15 @@ Dedicated to the public domain under CC0: https://creativecommons.org/publicdoma
 # Writeup
 
 Writeup is a text markup format that translates to HTML5. It is similar to Markdown in spirit, but is not equivalent. Some differences:
-* The line-oriented syntax is designed to make correct implementation simple and unambiguous.
 * Hierarchical sections.
-* Special handling of leading version and license lines in source files.
-* Builtin Javascript presentation mode.
 * Unambiguous character escape syntaxes.
-* A versioning scheme that will allow for format evolution while preserving the ability to build old source files.
+* Built in Javascript presentation mode.
+* A line-oriented syntax designed to make correct implementation simple and unambiguous.
+* A versioning scheme that should allow for format evolution while preserving the ability to build old source files.
+* Special handling of leading version and license lines.
+* Integration with <https:github.com/gwk/muck Muck>, a build tool for data projects.
+
+The project is hosted at <https:github.com/gwk/writeup>, with documentation at <https:gwk.github.io/writeup>.
 
 ## License
 All of the source code and documentation is dedicated to the public domain under CC0: https://creativecommons.org/.publicdomain/zero/1.0/.
@@ -18,7 +21,7 @@ All of the source code and documentation is dedicated to the public domain under
 
 # Usage
 
-Writeup can take 0, 1 or 2 arguments, defaulting to stdout and stdin as follows:
+Writeup can take 0, 1 or 2 arguments, defaulting to `stdout` and `stdin` as follows:
 | $ ./writeup.py <in >out
 | $ ./writeup.py file.wu > out
 | $ ./writeup.py file.wu file.html
@@ -68,36 +71,37 @@ These are translated as follows:
 There is also support for inline markup:
 * Inline code is quoted with backticks like so: `\`…\``
   * Literal backticks and backslashes within an inline code span are written by escaping with a backslash: `\\\`` and `\\\\`
-* A generic span syntax also exists: `<tag: …>`, where tag can be one of the following:
-  * `b`: bold text: `<b: bold text>` => <b: bold text>.
-  * `embed`: embed an external file.
+* A generic span syntax also exists: `<tag: …>`, where the tag can be one of the following:
+  * `b`: bold text: `<b: bold text>` → <b: bold text>.
+  * `embed`: embed content from an external file.
   * `http`, `https`, `mailto`: a link:
     * If the link is followed by a space and additional words of text, then the text becomes the visible link text.
-    * Example: `<https://github.com/gwk/writeup>` => <https://github.com/gwk/writeup>
-    * Example: `<https://github.com/gwk/writeup writeup>` => <https://github.com/gwk/writeup writeup>
+    * Example: `<https://github.com/gwk/writeup>` → <https://github.com/gwk/writeup>
+    * Example: `<https://github.com/gwk/writeup writeup>` → <https://github.com/gwk/writeup writeup>
 * More inline markup features need to be added!
   * italics, strikethrough, edit additions and deletions, etc.
 
 ## Comparison to Markdown
 Writeup differs from Github Flavored Markdown (GFD) substantially; here are some of the more obvious points:
 * Writeup headers create a hierarchical structure of `<section>` blocks in the document; Markdown has a flat structure.
-* By default the output HTML contains CSS, Javascript, and class attributes in order to stand alone; the Github markup system purposefully strips this out of documents.
-* Writeup does not currently support:
+* By default the output HTML contains CSS, Javascript, and class attributes in order to stand alone; the Github markup system purposefully strips such content out of documents.
+* Writeup does not support:
   * Italics with `*`, bold with `**`, both with `_`, or strikethrough with `~~`.
   * Markdown link syntax `[http://...](name...)`.
-  * Ordered lists.
   * Fenced codeblocks with `\`\`\``.
-  * Syntax highlighting (maybe one day…).
   * Tables.
   * Task lists.
   * Domain-specific features like @mentions.
+* Some features that have not been implemented:
+  * Syntax highlighting.
+  * Ordered lists.
 
 ## Warnings
 Warnings are issued for the following conditions, including:
-* a blank line is not empty.
-* the final line does not end with a newline character.
-* indentation is an odd number of spaces.
-* indentation consisting of characters other than spaces.
+* A blank line is not empty (meaning it contains whitespace).
+* The final line does not end with a newline character.
+* Indentation is an odd number of spaces.
+* Indentation consisting of characters other than spaces.
 
 
 # Versioning
@@ -121,7 +125,7 @@ Writeup HTML files contain CSS and Javascript for both normal and presentation m
 
 # Implementation
 
-Writeup is currently implemented as a Python 3.5 script, depending only on the standard library.
+Writeup is currently implemented as a Python 3.6 script, depending only on the standard library.
 
 
 # Examples
