@@ -1,4 +1,4 @@
 {
-  'cmd': 'writeup -bare',
+  'interpreter': 'writeup -bare',
   'links': 'test',
 }
