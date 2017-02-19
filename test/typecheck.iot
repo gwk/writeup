@@ -1,5 +1,5 @@
 {
-  'cmd': 'mypy writeup',
+  'cmd': 'mypy --python-version=3.6 writeup',
   'links': 'writeup',
-  'skip': True
+  'skip': True,
 }
