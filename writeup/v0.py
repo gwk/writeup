@@ -28,17 +28,17 @@ def main() -> None:
   arg_parser.add_argument('-bare', action='store_true', help='Omit all non-HTML output.')
   args = arg_parser.parse_args()
 
-  if args.src_path == '': failF('src_path cannot be empty string')
-  if args.dst_path == '': failF('dst_path cannot be empty string')
+  if args.src_path == '': exit('src_path cannot be empty string')
+  if args.dst_path == '': exit('dst_path cannot be empty string')
   if args.src_path == args.dst_path and args.src_path is not None:
-    failF('src_path and dst_path cannot be the same path: {!r}', args.src_path)
+    exit(f'src_path and dst_path cannot be the same path: {args.src_path!r}')
 
   f_in  = open(args.src_path) if args.src_path else stdin
   f_out = open(args.dst_path, 'w') if args.dst_path else stdout
   src_path = f_in.name
 
   if f_in == stdin and f_in.isatty():
-    print('writeup: reading from stdin...', file=stderr)
+    errL('writeup: reading from stdin...')
 
   if args.print_dependencies:
     dependencies = writeup_dependencies(
@@ -54,7 +54,7 @@ def main() -> None:
       with open(path) as f:
         css.append(f.read())
     except FileNotFoundError:
-      failF('writeup: css file does not exist: {!r}', args.css)
+      exit(f'writeup: css file does not exist: {args.css!r}')
 
   else:
     html_lines = writeup(
@@ -78,15 +78,15 @@ def writeup(src_path: str, src_lines: Iterable[str], title: str, description: st
     '<html>',
     '<head>',
     '  <meta charset="utf-8">',
-    '  <title>{}</title>'.format(title),
-    '  <meta name="description" content="{}">'.format(description),
-    '  <meta name="author" content="{}">'.format(author),
+    f'  <title>{title}</title>',
+    f'  <meta name="description" content="{description}">',
+    f'  <meta name="author" content="{author}">',
     '  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">', # empty icon.
   ]
   if css:
-    html_lines.append('  <style type="text/css">{}</style>'.format(css))
+    html_lines.append(f'  <style type="text/css">{css}</style>')
   if js:
-    html_lines.append('  <script type="text/javascript"> "use strict";{}</script>'.format(js))
+    html_lines.append(f'  <script type="text/javascript"> "use strict";{js}</script>')
   html_lines.append('</head>')
   html_lines.append('<body id="body">')
 
@@ -211,10 +211,9 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
       version_line = ''
     m = version_re.fullmatch(version_line)
     if not m:
-      failF('writeup error: first line must specify writeup version matching pattern: {!r}\n  found: {!r}',
-        version_re.pattern, version_line)
+      exit(f'writeup error: first line must specify writeup version matching pattern: {version_re.pattern!r}\n  found: {version_line!r}')
     version = int(m.group(1))
-    if version != 0: failF('unsupported version number: {}', version)
+    if version != 0: exit(f'unsupported version number: {version}')
     line_offset += 1
 
   # Iterate over lines.
@@ -253,22 +252,24 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
   if emit_js:
     # Generate tables.
     out(0, '<script type="text/javascript"> "use strict";')
-    out(0, 'section_ids = [{}];'.format(','.join("'s{}'".format(sid) for sid in ctx.section_ids)))
-    out(0, "paging_ids = ['body', {}];".format(','.join("'s{}'".format(pid) for pid in ctx.paging_ids)))
+    section_ids = ','.join(f"'s{sid}'" for sid in ctx.section_ids)
+    out(0, f'section_ids = [{section_ids}];')
+    paging_ids = ','.join(f"'s{pid}'" for pid in ctx.paging_ids)
+    out(0, f"paging_ids = ['body', {paging_ids}];")
     out(0, '</script>')
 
 
 def writeup_line(ctx: Ctx, line: str, prev_state: int, state: int, groups) -> None:
   'Inner function to process a line.'
 
-  #errF('{:03} {}{}: {}', ctx.line_num, state_letters[prev_state], state_letters[state], line)
+  #errZ(f'{ctx.line_num:03} {state_letters[prev_state]}{state_letters[state]}: {line}')
 
-  def warn(fmt, *items):
-    errFL('writeup warning: {}:{}: ' + fmt, ctx.src_path, ctx.line_num + 1, *items)
-    errFL("  {!r}", line)
+  def warn(*items):
+    errL(f'writeup warning: {ctx.src_path}:{ctx.line_num+1}: ', *items)
+    errL(f'  {line!r}')
 
-  def error(fmt, *items):
-    failF('writeup error: {}:{}: ' + fmt, ctx.src_path, ctx.line_num + 1, *items)
+  def error(*items):
+    exit(f'writeup error: {ctx.src_path}:{ctx.line_num+1}: ', *items)
 
   ctx.error = error
 
@@ -297,7 +298,7 @@ def writeup_line(ctx: Ctx, line: str, prev_state: int, state: int, groups) -> No
   elif state == s_blank: output_blank(ctx, groups, is_first)
   elif state == s_text: output_text(ctx, groups, is_first)
   elif state == s_end: output_end(ctx, groups, is_first)
-  else: error('bad state: {}', state)
+  else: error(f'bad state: {state}')
 
 
 def finish_list(ctx: Ctx) -> None:
@@ -310,7 +311,8 @@ def finish_code(ctx: Ctx) -> None:
   # a newline after the `pre` open tag looks ok,
   # but a final newline between content and the `pre` close tag looks bad.
   # therefore we must take care to format the contents without a final newline.
-  ctx.out(0, '<pre>\n{}</pre>'.format('\n'.join(ctx.pre_lines)))
+  contents = '\n'.join(ctx.pre_lines)
+  ctx.out(0, f'<pre>\n{contents}</pre>')
   ctx.pre_lines.clear()
 
 
@@ -341,17 +343,17 @@ def output_section(ctx: Ctx, groups: Sequence[str], is_first: bool):
   while ctx.section_depth >= depth: # close previous peer section and its children.
     sid = '.'.join(str(i) for i in ctx.section_stack)
     prev_index = ctx.section_stack.pop()
-    ctx.out(ctx.section_depth, '</section>') # <!--s{}-->'.format(sid))
+    ctx.out(ctx.section_depth, '</section>')
   while ctx.section_depth < depth: # open new section and any children.
     index = prev_index + 1
     ctx.section_stack.append(index)
     d = ctx.section_depth
     sid = '.'.join(str(i) for i in ctx.section_stack)
-    quote_prefix = 'q{}'.format(ctx.quote_depth) if ctx.quote_depth else ''
-    ctx.out(d - 1, '<section class="S{}" id="{}s{}">'.format(d, quote_prefix, sid))
+    quote_prefix = f'q{ctx.quote_depth}' if ctx.quote_depth else ''
+    ctx.out(d - 1, f'<section class="S{d}" id="{quote_prefix}s{sid}">')
     prev_index = 0
   # current.
-  ctx.out(depth, '<h{} id="h{}">{}</h{}>'.format(h_num, sid, convert_text(ctx, text), h_num))
+  ctx.out(depth, f'<h{h_num} id="h{sid}">{convert_text(ctx, text)}</h{h_num}>')
   ctx.section_ids.append(sid)
   if depth <= 2:
     ctx.paging_ids.append(sid)
@@ -362,14 +364,14 @@ def output_list(ctx: Ctx, groups: Sequence[str], is_first: bool):
   check_whitespace(ctx, -1, indents, ' in indent')
   l = len(indents)
   if l % 2:
-    ctx.warn('odd indentation: {}', l)
+    ctx.warn(f'odd indentation: {l}')
   depth = l // 2 + 1
   check_whitespace(ctx, 1, spaces, ' following dash')
   for i in range(ctx.list_depth, depth, -1):
     ctx.out(ctx.section_depth + (i - 1), '</ul>')
   for i in range(ctx.list_depth, depth):
-    ctx.out(ctx.section_depth + i, '<ul class="L{}">'.format(i + 1))
-  ctx.out(ctx.section_depth + depth, '<li>{}</li>'.format(convert_text(ctx, text)))
+    ctx.out(ctx.section_depth + i, f'<ul class="L{i+1}">')
+  ctx.out(ctx.section_depth + depth, f'<li>{convert_text(ctx, text)}</li>')
   ctx.list_depth = depth
 
 
@@ -408,11 +410,10 @@ def output_end(ctx: Ctx, groups: Sequence[str], is_first: bool):
 def check_whitespace(ctx, len_exp, string, msg_suffix=''):
   for i, c in enumerate(string):
     if c != ' ':
-      ctx.warn("invalid whitespace character at position {}{}: {}", i + 1, msg_suffix, repr(c))
+      ctx.warn(f'invalid whitespace character at position {i+1}{msg_suffix}: {c!r}')
       return False
   if len_exp >= 0 and len(string) != len_exp:
-    ctx.warn('expected exactly {} space{}{}; found: {}',
-      len_exp, ('' if len_exp == 1 else 's'), msg_suffix, len(string))
+    ctx.warn(f'expected exactly {len_exp} space{"" if len_exp == 1 else "s"}{msg_suffix}; found: {len(string)}')
     return False
   return True
 
@@ -439,11 +440,11 @@ def convert_text(ctx: Ctx, text: str):
 def span_conv(ctx: Ctx, text: str):
   'convert generic angle bracket span to html.'
   tag, colon, body = text.partition(':')
-  if colon is None: ctx.error('malformed span is missing colon after tag: `{}`'.format(text))
+  if colon is None: ctx.error(f'malformed span is missing colon after tag: {text!r}')
   try:
     f = span_dispatch[tag]
   except KeyError:
-    ctx.error('span has invalid tag: `{}`'.format(tag))
+    ctx.error(f'span has invalid tag: {tag!r}')
   return f(ctx, tag, body.strip())
 
 
@@ -453,7 +454,7 @@ def span_code_conv(ctx: Ctx, text: str):
   text_escaped = span_code_esc_re.sub(span_char_esc_fn, text)
   text_escaped_html = html_esc(text_escaped)
   text_spaced = text_escaped_html.replace(' ', '&nbsp;')
-  return '<code>{}</code>'.format(text_spaced)
+  return f'<code>{text_spaced}</code>'
 
 
 # span patterns and associated handlers.
@@ -470,7 +471,7 @@ span_re = re.compile('|'.join(p for p, _, in span_kinds))
 
 def span_bold(ctx: Ctx, tag: str, text: str):
   'convert a `bold` span into html.'
-  return '<b>{}</b>'.format(html_esc(text))
+  return f'<b>{html_esc(text)}</b>'
 
 def span_embed(ctx: Ctx, tag: str, text: str):
   'convert an `embed` span into html.'
@@ -483,11 +484,11 @@ def span_embed(ctx: Ctx, tag: str, text: str):
   actual_path = target_path if path_exists(target_path) else path_join('_build', target_path)
   try: f = open(actual_path)
   except FileNotFoundError:
-    ctx.error('embedded file not found: {!r}; inferred path: {!r}', target_path, actual_path)
+    ctx.error(f'embedded file not found: {target_path!r}; inferred path: {actual_path!r}')
   ext = split_ext(target_path)[1]
   try: fn = embed_dispatch[ext]
   except KeyError:
-    ctx.error('embedded file has unknown extension type: {!r}:', actual_path)
+    ctx.error(f'embedded file has unknown extension type: {actual_path!r}')
   return fn(ctx, f)
 
 
@@ -495,13 +496,13 @@ def span_link(ctx: Ctx, tag: str, text: str):
   'convert a `link` span into html.'
   words = text.split()
   if not words:
-    ctx.error('link is empty: {!r}: {!r}', tag, text)
-  link = '{}:{}'.format(tag, words[0])
+    ctx.error(f'link is empty: {tag!r}: {text!r}')
+  link = f'{tag}:{words[0]}'
   if len(words) == 1:
     visible = link
   else:
     visible = ' '.join(words[1:])
-  return '<a href={}>{}</a>'.format(html_esc_attr(link), html_esc(visible))
+  return f'<a href={html_esc_attr(link)}>{html_esc(visible)}</a>'
 
 
 def span_span(ctx: Ctx, tag: str, text: str):
@@ -517,13 +518,14 @@ def span_span(ctx: Ctx, tag: str, text: str):
         found_semicolon = True
         word = word[:-1]
       key, eq, val = word.partition('=')
-      if not eq: ctx.error('span attribute is missing `=`; word: {!r}', word)
-      if not key.isalnum(): ctx.error('span attribute name is not alphanumeric: {!r}', word)
-      if not val: ctx.error('span attribute value is empty; word: {!r}', word)
+      if not eq: ctx.error(f'span attribute is missing `=`; word: {word!r}')
+      if not key.isalnum(): ctx.error(f'span attribute name is not alphanumeric: {word!r}')
+      if not val: ctx.error(f'span attribute value is empty; word: {word!r}')
       if val[0] in ('"', "'") and (len(val) < 2 or val[0] != val[-1]):
-        ctx.error('span attribute value has mismatched quotes (possibly due to writeup doing naive splitting on whitespace); word: {!r}; val: {!r}', word, val)
+        ctx.error('span attribute value has mismatched quotes (possibly due to writeup doing naive splitting on whitespace);' \
+          f'word: {word!r}; val: {val!r}')
       attrs.append(word)
-  return '<span {}>{}</span>'.format(' '.join(attrs), ' '.join(body))
+  return f"<span {' '.join(attrs)}>{' '.join(body)}</span>"
 
 
 span_dispatch = {
@@ -549,19 +551,19 @@ def embed_csv(ctx, f):
   else:
     out('<thead>', '<tr>')
     for col in header:
-        out('<th>{}</th>'.format(html_esc(col)))
+        out(f'<th>{html_esc(col)}</th>')
     out('</tr>', '</thead>\n', '<tbody>\n')
     for row in it:
       out('<tr>')
       for cell in row:
-        out('<td>{}</td>'.format(html_esc(cell)))
+        out(f'<td>{html_esc(cell)}</td>')
       out('</tr>')
   out('</tbody>', '</table>\n')
   return ''.join(table)
 
 
 def embed_txt(ctx, f):
-  return '<pre>\n{}</pre>'.format(f.read())
+  return f'<pre>\n{f.read()}</pre>'
 
 
 embed_dispatch = {
@@ -595,15 +597,11 @@ def html_esc_attr(text: str):
 
 # Error reporting.
 
-def errF(fmt: str, *items):
-  print(fmt.format(*items), end='', file=stderr)
+def errZ(*items):
+  print(*items, end='', file=stderr)
 
-def errFL(fmt: str, *items):
-  print(fmt.format(*items), file=stderr)
-
-def failF(fmt:str, *items):
-  errFL(fmt, *items)
-  exit(1)
+def errL(*items):
+  print(*items, file=stderr)
 
 
 # CSS.
