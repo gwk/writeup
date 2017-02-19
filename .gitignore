@@ -1,7 +1,10 @@
-# python.
-__pycache__
+# Finder.
+.DS_Store
+
+# Python.
+__pycache__/
+*.egg-info/
 
 # writeup.
 _build
 _misc
-writeup_tool.egg-info
