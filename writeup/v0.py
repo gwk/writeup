@@ -497,7 +497,12 @@ def span_link(ctx: Ctx, tag: str, text: str):
   words = text.split()
   if not words:
     ctx.error(f'link is empty: {tag!r}: {text!r}')
-  link = f'{tag}:{words[0]}'
+  if tag == 'link':
+    link = words[0]
+    if ctx.dependencies is not None:
+      ctx.dependencies.append(words[0])
+  else:
+    link = f'{tag}:{words[0]}'
   if len(words) == 1:
     visible = link
   else:
@@ -533,6 +538,7 @@ span_dispatch = {
   'embed' : span_embed,
   'http': span_link,
   'https': span_link,
+  'link': span_link,
   'mailto': span_link,
   'span': span_span,
 }
