@@ -481,14 +481,13 @@ def span_embed(ctx: Ctx, tag: str, text: str):
   if ctx.dependencies is not None:
     ctx.dependencies.append(target_path)
     return ''
-  actual_path = target_path if path_exists(target_path) else path_join('_build', target_path)
-  try: f = open(actual_path)
+  try: f = open(target_path)
   except FileNotFoundError:
-    ctx.error(f'embedded file not found: {target_path!r}; inferred path: {actual_path!r}')
+    ctx.error(f'embedded file not found: {target_path!r}')
   ext = split_ext(target_path)[1]
   try: fn = embed_dispatch[ext]
   except KeyError:
-    ctx.error(f'embedded file has unknown extension type: {actual_path!r}')
+    ctx.error(f'embedded file has unknown extension type: {target_path!r}')
   return fn(ctx, f)
 
 
