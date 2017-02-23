@@ -17,7 +17,7 @@ __all__ = ['main', 'writeup', 'writeup_dependencies']
 
 
 def main() -> None:
-  arg_parser = ArgumentParser(description='Converts .wu files to html.')
+  arg_parser = ArgumentParser(prog='writeup', description='Converts .wu files to html.')
   arg_parser.add_argument('src_path', nargs='?', help='Input .wu source path; defaults to <stdin>.')
   arg_parser.add_argument('dst_path', nargs='?', help='Output path: defaults to <stdout>.')
   arg_parser.add_argument('-print-dependencies', action='store_true',
@@ -28,17 +28,17 @@ def main() -> None:
   arg_parser.add_argument('-bare', action='store_true', help='Omit all non-HTML output.')
   args = arg_parser.parse_args()
 
-  if args.src_path == '': exit('src_path cannot be empty string')
-  if args.dst_path == '': exit('dst_path cannot be empty string')
+  if args.src_path == '': exit('source path cannot be empty string.')
+  if args.dst_path == '': exit('destination path cannot be empty string.')
   if args.src_path == args.dst_path and args.src_path is not None:
-    exit(f'src_path and dst_path cannot be the same path: {args.src_path!r}')
+    exit(f'source path and destination path cannot be the same path: {args.src_path!r}')
 
   f_in  = open(args.src_path) if args.src_path else stdin
   f_out = open(args.dst_path, 'w') if args.dst_path else stdout
   src_path = f_in.name
 
   if f_in == stdin and f_in.isatty():
-    errL('writeup: reading from stdin...')
+    errSL('writeup: reading from stdin...')
 
   if args.print_dependencies:
     dependencies = writeup_dependencies(
@@ -265,12 +265,15 @@ def writeup_line(ctx: Ctx, line: str, prev_state: int, state: int, groups) -> No
   #errZ(f'{ctx.line_num:03} {state_letters[prev_state]}{state_letters[state]}: {line}')
 
   def warn(*items):
-    errL(f'writeup warning: {ctx.src_path}:{ctx.line_num+1}: ', *items)
-    errL(f'  {line!r}')
+    errSL(f'writeup warning: {ctx.src_path}:{ctx.line_num+1}: ', *items)
+    errSL(f'  {line!r}')
 
   def error(*items):
-    exit(f'writeup error: {ctx.src_path}:{ctx.line_num+1}: ', *items)
+    errSL(f'writeup error: {ctx.src_path}:{ctx.line_num+1}: ', *items)
+    errSL(f'  {line!r}')
+    exit(1)
 
+  ctx.warn = warn
   ctx.error = error
 
   if not line.endswith('\n'):
@@ -529,6 +532,7 @@ def span_span(ctx: Ctx, tag: str, text: str):
         ctx.error('span attribute value has mismatched quotes (possibly due to writeup doing naive splitting on whitespace);' \
           f'word: {word!r}; val: {val!r}')
       attrs.append(word)
+  if not found_semicolon: ctx.error(f'span attributes must be terminated with semicolon')
   return f"<span {' '.join(attrs)}>{' '.join(body)}</span>"
 
 
@@ -562,7 +566,7 @@ def embed_csv(ctx, f):
       out('<tr>')
       for cell in row:
         out(f'<td>{html_esc(cell)}</td>')
-      out('</tr>')
+      out('</tr>\n')
   out('</tbody>', '</table>\n')
   return ''.join(table)
 
@@ -603,9 +607,9 @@ def html_esc_attr(text: str):
 # Error reporting.
 
 def errZ(*items):
-  print(*items, end='', file=stderr)
+  print(*items, sep='', end='', file=stderr) #!cov-ignore.
 
-def errL(*items):
+def errSL(*items):
   print(*items, file=stderr)
 
 

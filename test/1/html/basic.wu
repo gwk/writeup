@@ -1,0 +1,38 @@
+writeup v0
+
+# Basic
+
+# Header 1
+Paragraph 1 line 1.
+Paragraph 1 line 2.
+`code span`. <b: bold text>. <span: style=color:red; span style RED>.
+
+Paragraph 2.
+
+List:
+* A
+* B
+  * B1
+  * B2
+* C
+Post-list.
+
+## Header 2
+Line 2.
+Line 3.
+
+
+# Blockquote
+> # Header
+> Text.
+> List:
+> * A
+>   * B
+>
+>> Double Blockquote.
+>| Pre.
+
+# Pre
+| # Header 1
+| Paragraph 1 line 1.
+| Paragraph 1 line 2. `code span`.

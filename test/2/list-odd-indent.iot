@@ -1,0 +1,11 @@
+{
+  'cmd': "$PROJ/writeup/v0.py",
+  'in': '''\
+writeup v0
+
+* A.
+ * single space indent.
+''',
+  'code': 0,
+  'out_mode': 'ignore',
+}

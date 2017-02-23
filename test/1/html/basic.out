@@ -1,0 +1,94 @@
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>basic.wu</title>
+  <meta name="description" content="">
+  <meta name="author" content="">
+  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
+</head>
+<body id="body">
+<section class="S1" id="s1">
+  <h1 id="h1">Basic</h1>
+</section>
+<section class="S1" id="s2">
+  <h1 id="h2">Header 1</h1>
+  <p>
+    Paragraph 1 line 1.
+
+  <br />
+    Paragraph 1 line 2.
+
+  <br />
+    <code>code&nbsp;span</code>. <b>bold text</b>. <span style=color:red>span style RED</span>.
+
+  </p>
+  <p>
+    Paragraph 2.
+
+  </p>
+  <p>
+    List:
+
+  </p>
+  <ul class="L1">
+    <li>A</li>
+    <li>B</li>
+    <ul class="L2">
+      <li>B1</li>
+      <li>B2</li>
+    </ul>
+    <li>C</li>
+  </ul>
+  <p>
+    Post-list.
+
+  </p>
+  <section class="S2" id="s2.1">
+    <h2 id="h2.1">Header 2</h2>
+    <p>
+      Line 2.
+
+    <br />
+      Line 3.
+
+    </p>
+  </section>
+</section>
+<section class="S1" id="s3">
+  <h1 id="h3">Blockquote</h1>
+  <blockquote>
+    <section class="S1" id="q1s1">
+      <h1 id="h1">Header</h1>
+      <p>
+        Text.
+
+      <br />
+        List:
+
+      </p>
+      <ul class="L1">
+        <li>A</li>
+        <ul class="L2">
+          <li>B</li>
+        </ul>
+      </ul>
+      <blockquote>
+        <p>
+          Double Blockquote.
+
+        </p>
+      </blockquote>
+    <pre>
+Pre.</pre>
+    </section>
+  </blockquote>
+</section>
+<section class="S1" id="s4">
+  <h1 id="h4">Pre</h1>
+<pre>
+# Header 1
+Paragraph 1 line 1.
+Paragraph 1 line 2. `code span`.</pre>
+</section>
+</body>
+</html>

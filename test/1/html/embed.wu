@@ -1,0 +1,16 @@
+writeup v0
+
+# txt
+<embed: test/assets/text.txt>
+
+# csv
+## empty
+<embed: test/assets/empty.csv>
+## non-empty
+<embed: test/assets/table.csv>
+
+# svg
+<embed: test/assets/circle.svg>
+
+# img
+<embed: test/assets/head.jpg> <embed: test/assets/head.gif> <embed: test/assets/head.png>

@@ -1,0 +1,24 @@
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>links.wu</title>
+  <meta name="description" content="">
+  <meta name="author" content="">
+  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
+</head>
+<body id="body">
+<p>
+  <a href=http://github.com>http://github.com</a> <a href=http://github.com>github</a>
+
+<br />
+  <a href=https://github.com>https://github.com</a> <a href=https://github.com>github</a>
+
+<br />
+  <a href=test/assets/text.txt>test/assets/text.txt</a> <a href=test/assets/text.txt>text</a>
+
+<br />
+  <a href=mailto:a@b.c>mailto:a@b.c</a> <a href=mailto:a@b.c>address</a>
+
+</p>
+</body>
+</html>

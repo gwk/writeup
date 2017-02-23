@@ -1,0 +1,5 @@
+{
+  'cmd': "$PROJ/writeup/v0.py ''",
+  'err_val': 'source path cannot be empty string.\n',
+
+}
