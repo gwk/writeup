@@ -111,16 +111,16 @@ All writeup documents require a version line at the beginning of the document, l
 
 Writeup is currently experimental, and the only version number supported is 0. Once the format appears reasonably stable, then it will be promoted to v1. From then on, if the format changes, implementations should either recognize and respect or else reject older documents.
 
-Text snippets submitted to a program can omit the version number; it is the responsibility of the program to track the format version as necessary.
+Text snippets submitted to a program using Writeup as a library can omit the version number; it is the responsibility of the program to track the format version as necessary.
 
 ## Adoption
 If you start using writeup seriously please let me know and I will bump the version number to 1.
 
 ## Paging
-Writeup HTML contains Javascript that facilitates jumping paging across primary and secondary sections using the left and right arrow keys.
+Writeup HTML contains Javascript that facilitates paging across primary and secondary sections using the left and right arrow keys.
 
 ## Presentation Mode
-Writeup HTML files contain CSS and Javascript for both normal and presentation modes. Press `p` in the browser to toggle between modes. Presentation mode simply adds styling to the primary and secondary sections to make them the full window height; in conjunction with the paging mechanism this lets you use writeup for simple slide decks.
+Writeup HTML files contain CSS and Javascript for both normal and presentation modes. Press `p` in the browser to toggle between modes. Presentation mode simply adds styling to the primary and secondary sections to render them at the full window height; in conjunction with the paging mechanism this lets you use Writeup documents as simple slide decks.
 
 
 # Implementation
