@@ -1,7 +1,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>docs/index.wu</title>
+  <title>doc/index.wu</title>
   <meta name="description" content="">
   <meta name="author" content="">
   <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
@@ -52,11 +52,11 @@ window.onkeypress = function(e) {
 </script>
 </head>
 <body id="body">
-<section class="S1" id="s1">
+<p>
+  <section class="S1" id="s1">
   <h1 id="h1">Writeup</h1>
   <p>
     Writeup is a text markup format that translates to HTML5. It is similar to Markdown in spirit, but is not equivalent. Some differences:
-
   </p>
   <ul class="L1">
     <li>Hierarchical sections.</li>
@@ -69,21 +69,19 @@ window.onkeypress = function(e) {
   </ul>
   <p>
     The project is hosted at <a href=https:github.com/gwk/writeup>https:github.com/gwk/writeup</a>, with documentation at <a href=https:gwk.github.io/writeup>https:gwk.github.io/writeup</a>.
-
   </p>
   <section class="S2" id="s1.1">
     <h2 id="h1.1">License</h2>
     <p>
-      All of the source code and documentation is dedicated to the public domain under CC0: https://creativecommons.org/.publicdomain/zero/1.0/.
-
+      All of the source code and documentation is dedicated to the public domain under CC0: <a href=https://creativecommons.org/.publicdomain/zero/1.0/>https://creativecommons.org/.publicdomain/zero/1.0/</a>.
     </p>
   </section>
 </section>
-<section class="S1" id="s2">
-  <h1 id="h2">Usage</h1>
+</p>
+<section class="S1" id="s1">
+  <h1 id="h1">Usage</h1>
   <p>
     Writeup can take 0, 1 or 2 arguments, defaulting to <code>stdout</code> and <code>stdin</code> as follows:
-
   </p>
 <pre>
 $ ./writeup.py &lt;in &gt;out
@@ -108,11 +106,10 @@ optional arguments:
   -no-js               Omit Javascript.
   -bare                Omit all non-HTML output.</pre>
 </section>
-<section class="S1" id="s3">
-  <h1 id="h3">Format</h1>
+<section class="S1" id="s2">
+  <h1 id="h2">Format</h1>
   <p>
     Writeup documents consist of:
-
   </p>
   <ul class="L1">
     <li>An initial required version line, e.g.: <code>writeup&nbsp;v0</code>.</li>
@@ -131,7 +128,6 @@ optional arguments:
   </ul>
   <p>
     These are translated as follows:
-
   </p>
   <ul class="L1">
     <li>Line breaks are inserted between text lines.</li>
@@ -145,7 +141,6 @@ optional arguments:
   </ul>
   <p>
     There is also support for inline markup:
-
   </p>
   <ul class="L1">
     <li>Inline code is quoted with backticks like so: <code>`…`</code></li>
@@ -168,11 +163,10 @@ optional arguments:
       <li>italics, strikethrough, edit additions and deletions, etc.</li>
     </ul>
   </ul>
-  <section class="S2" id="s3.1">
-    <h2 id="h3.1">Comparison to Markdown</h2>
+  <section class="S2" id="s2.1">
+    <h2 id="h2.1">Comparison to Markdown</h2>
     <p>
       Writeup differs from Github Flavored Markdown (GFD) substantially; here are some of the more obvious points:
-
     </p>
     <ul class="L1">
       <li>Writeup headers create a hierarchical structure of <code>&lt;section&gt;</code> blocks in the document; Markdown has a flat structure.</li>
@@ -193,11 +187,10 @@ optional arguments:
       </ul>
     </ul>
   </section>
-  <section class="S2" id="s3.2">
-    <h2 id="h3.2">Warnings</h2>
+  <section class="S2" id="s2.2">
+    <h2 id="h2.2">Warnings</h2>
     <p>
       Warnings are issued for the following conditions, including:
-
     </p>
     <ul class="L1">
       <li>A blank line is not empty (meaning it contains whitespace).</li>
@@ -207,56 +200,48 @@ optional arguments:
     </ul>
   </section>
 </section>
-<section class="S1" id="s4">
-  <h1 id="h4">Versioning</h1>
+<section class="S1" id="s3">
+  <h1 id="h3">Versioning</h1>
   <p>
     All writeup documents require a version line at the beginning of the document, like this:
-
   </p>
 <pre>
 writeup v0</pre>
   <p>
     Writeup is currently experimental, and the only version number supported is 0. Once the format appears reasonably stable, then it will be promoted to v1. From then on, if the format changes, implementations should either recognize and respect or else reject older documents.
-
   </p>
   <p>
-    Text snippets submitted to a program can omit the version number; it is the responsibility of the program to track the format version as necessary.
-
+    Text snippets submitted to a program using Writeup as a library can omit the version number; it is the responsibility of the program to track the format version as necessary.
   </p>
-  <section class="S2" id="s4.1">
-    <h2 id="h4.1">Adoption</h2>
+  <section class="S2" id="s3.1">
+    <h2 id="h3.1">Adoption</h2>
     <p>
       If you start using writeup seriously please let me know and I will bump the version number to 1.
-
     </p>
   </section>
-  <section class="S2" id="s4.2">
-    <h2 id="h4.2">Paging</h2>
+  <section class="S2" id="s3.2">
+    <h2 id="h3.2">Paging</h2>
     <p>
-      Writeup HTML contains Javascript that facilitates jumping paging across primary and secondary sections using the left and right arrow keys.
-
+      Writeup HTML contains Javascript that facilitates paging across primary and secondary sections using the left and right arrow keys.
     </p>
   </section>
-  <section class="S2" id="s4.3">
-    <h2 id="h4.3">Presentation Mode</h2>
+  <section class="S2" id="s3.3">
+    <h2 id="h3.3">Presentation Mode</h2>
     <p>
-      Writeup HTML files contain CSS and Javascript for both normal and presentation modes. Press <code>p</code> in the browser to toggle between modes. Presentation mode simply adds styling to the primary and secondary sections to make them the full window height; in conjunction with the paging mechanism this lets you use writeup for simple slide decks.
-
+      Writeup HTML files contain CSS and Javascript for both normal and presentation modes. Press <code>p</code> in the browser to toggle between modes. Presentation mode simply adds styling to the primary and secondary sections to render them at the full window height; in conjunction with the paging mechanism this lets you use Writeup documents as simple slide decks.
     </p>
   </section>
 </section>
-<section class="S1" id="s5">
-  <h1 id="h5">Implementation</h1>
+<section class="S1" id="s4">
+  <h1 id="h4">Implementation</h1>
   <p>
     Writeup is currently implemented as a Python 3.6 script, depending only on the standard library.
-
   </p>
 </section>
-<section class="S1" id="s6">
-  <h1 id="h6">Examples</h1>
+<section class="S1" id="s5">
+  <h1 id="h5">Examples</h1>
   <p>
     Sections and text:
-
   </p>
 <pre>
 # Header 1
@@ -271,14 +256,12 @@ line 2
 Line 3</pre>
   <p>
     Becomes:
-
   </p>
   <blockquote>
     <section class="S1" id="q1s1">
       <h1 id="h1">Header 1</h1>
       <p>
         line 1
-
       </p>
       <ul class="L1">
         <li>A</li>
@@ -293,32 +276,28 @@ Line 3</pre>
         <h2 id="h1.1">Header 2</h2>
         <p>
           line 2
-
         <br />
           Line 3
-
         </p>
       </section>
     </section>
   </blockquote>
 </section>
-<section class="S1" id="s7">
-  <h1 id="h7">Credits</h1>
+<section class="S1" id="s6">
+  <h1 id="h6">Credits</h1>
   <p>
     By George King.
-
   </p>
   <p>
     Shout out to the RZA, the GZA, Method Man, Raekwon, Ghostface Killah, Inspectah Deck, U-God, Masta Killa, Cappadonna, and the Ol' Dirty Bastard.
-
   </p>
 </section>
 <footer id="footer">
 Dedicated to the public domain under CC0: https://creativecommons.org/publicdomain/zero/1.0/.
 </footer>
 <script type="text/javascript"> "use strict";
-section_ids = ['s1','s1.1','s2','s3','s3.1','s3.2','s4','s4.1','s4.2','s4.3','s5','s6','s7'];
-paging_ids = ['body', 's1','s1.1','s2','s3','s3.1','s3.2','s4','s4.1','s4.2','s4.3','s5','s6','s7'];
+section_ids = ['s1','s2','s2.1','s2.2','s3','s3.1','s3.2','s3.3','s4','s5','s6'];
+paging_ids = ['body', 's1','s2','s2.1','s2.2','s3','s3.1','s3.2','s3.3','s4','s5','s6'];
 </script>
 </body>
 </html>

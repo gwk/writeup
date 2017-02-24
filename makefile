@@ -17,7 +17,8 @@ cov:
 	iotest -fail-fast -coverage
 
 docs:
-	writeup docs/index.wu docs/index.html
+	writeup -frag doc/abstract.wu readme.md
+	writeup doc/index.wu docs/index.html
 
 pip-develop:
 	pip3 install -e .

@@ -25,7 +25,8 @@ def main() -> None:
   arg_parser.add_argument('-css', nargs='+', default=(), help='paths to CSS.')
   arg_parser.add_argument('-no-css', action='store_true', help='Omit default CSS.')
   arg_parser.add_argument('-no-js', action='store_true', help='Omit default Javascript.')
-  arg_parser.add_argument('-bare', action='store_true', help='Omit all non-HTML output.')
+  arg_parser.add_argument('-frag', action='store_true', help='Omit the top-level HTML document structure.')
+
   args = arg_parser.parse_args()
 
   if args.src_path == '': exit('source path cannot be empty string.')
@@ -48,7 +49,7 @@ def main() -> None:
       print(dep, file=f_out)
     exit(0)
 
-  css = [] if (args.bare or args.no_css) else [default_css]
+  css = [] if (args.frag or args.no_css) else [default_css]
   for path in args.css:
     try:
       with open(path) as f:
@@ -61,42 +62,49 @@ def main() -> None:
       src_path=src_path,
       src_lines=f_in,
       title=src_path, # TODO.
-      description='',
-      author='',
+      description='', # TODO.
+      author='', # TODO.
       css=minify_css('\n'.join(css)),
-      js=(None if args.bare or args.no_js else minify_js(default_js)),
+      js=(None if args.frag or args.no_js else minify_js(default_js)),
+      emit_doc=(not args.frag),
     )
     for line in html_lines:
       print(line, file=f_out)
 
 
 def writeup(src_path: str, src_lines: Iterable[str], title: str, description: str, author: str,
-  css: Optional[str], js: Optional[str]) -> List[str]:
+  css: Optional[str], js: Optional[str], emit_doc: bool) -> List[str]:
   'generate a complete html document from a writeup file (or stream of lines).'
 
-  html_lines = [
-    '<html>',
-    '<head>',
-    '  <meta charset="utf-8">',
-    f'  <title>{title}</title>',
-    f'  <meta name="description" content="{description}">',
-    f'  <meta name="author" content="{author}">',
-    '  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">', # empty icon.
-  ]
-  if css:
-    html_lines.append(f'  <style type="text/css">{css}</style>')
-  if js:
-    html_lines.append(f'  <script type="text/javascript"> "use strict";{js}</script>')
-  html_lines.append('</head>')
-  html_lines.append('<body id="body">')
+  if emit_doc:
+    html_lines = [
+      '<html>',
+      '<head>',
+      '  <meta charset="utf-8">',
+      f'  <title>{title}</title>',
+      f'  <meta name="description" content="{description}">',
+      f'  <meta name="author" content="{author}">',
+      '  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">', # empty icon.
+    ]
+    if css:
+      html_lines.append(f'  <style type="text/css">{css}</style>')
+    if js:
+      html_lines.append(f'  <script type="text/javascript"> "use strict";{js}</script>')
+    html_lines.append('</head>')
+    html_lines.append('<body id="body">')
+  else:
+    html_lines = []
 
   writeup_body(
     out_lines=html_lines,
     out_dependencies=None,
     src_path=src_path,
     src_lines=src_lines,
-    emit_js=bool(js))
-  html_lines.append('</body>\n</html>')
+    emit_js=bool(js),
+    emit_doc=emit_doc,
+    )
+  if emit_doc:
+    html_lines.append('</body>\n</html>')
   return html_lines
 
 
@@ -111,7 +119,8 @@ def writeup_dependencies(src_path: str, src_lines: Iterable[str], dir_names: Opt
     out_dependencies=dependencies,
     src_path=src_path,
     src_lines=src_lines,
-    emit_js=False)
+    emit_js=False,
+    emit_doc=False)
   dependencies.sort()
   return dependencies
 
@@ -162,12 +171,13 @@ class Ctx:
   Structure for contextual information needed by a variety of functions called from `writeup_body`.
   '''
   def __init__(self, search_dir: str, src_path: str, out: Callable[..., None], dependencies: Optional[list],
-    emit_js: bool, line_offset: int, quote_depth: int) -> None:
+   line_offset: int, quote_depth: int, emit_doc: bool) -> None:
     self.search_dir = search_dir
     self.src_path = src_path
     self.out = out
     self.dependencies = dependencies
     self.quote_depth = quote_depth
+    self.emit_doc = emit_doc
     self.section_ids = [] # type: List[str] # accumulated list of all section ids.
     self.paging_ids = [] # type: List[str] # accumulated list of all paging (level 1 & 2) section ids.
     self.section_stack = [] # type: List[int] # stack of currently open sections.
@@ -179,15 +189,14 @@ class Ctx:
     self.line_num = 0 # updated per line.
     self.warn = dummy_fn # type: Callable[..., None] # updated per line.
     self.error = dummy_fn # type: Callable[..., None] # updated per line.
-
   @property
   def section_depth(self) -> int:
     return len(self.section_stack)
 
 
 def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
-  src_path: str, src_lines: Iterable[str], emit_js: bool, is_versioned=True,
-  line_offset=0, quote_depth=0) -> None:
+  src_path: str, src_lines: Iterable[str], emit_js: bool, emit_doc: bool,
+  is_versioned=True, line_offset=0, quote_depth=0) -> None:
   'Convert input writeup in `src_lines` to output html lines and dependencies.'
 
   if out_lines is None:
@@ -197,9 +206,8 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
       s = ' ' * (depth * 2) + ''.join(items)
       out_lines.append(s)
 
-  ctx = Ctx(search_dir=path_dir(src_path) or '.',
-   src_path=src_path, out=out, dependencies=out_dependencies,
-   emit_js=emit_js, line_offset=line_offset, quote_depth=quote_depth)
+  ctx = Ctx(search_dir=path_dir(src_path) or '.', src_path=src_path,
+   out=out, dependencies=out_dependencies, line_offset=line_offset, quote_depth=quote_depth, emit_doc=emit_doc)
 
   iter_src_lines = iter(src_lines)
 
@@ -330,6 +338,7 @@ def finish_quote(ctx: Ctx) -> None:
     line_offset=ctx.quote_line_num,
     is_versioned=False,
     emit_js=False,
+    emit_doc=False,
     quote_depth=ctx.quote_depth + 1)
   for ql in quoted_lines:
     ctx.out(ctx.section_depth + 1, ql)
@@ -406,7 +415,7 @@ def output_blank(ctx: Ctx, groups: Sequence[str], is_first: bool):
 def output_end(ctx: Ctx, groups: Sequence[str], is_first: bool):
   for i in range(ctx.section_depth, 0, -1):
     ctx.out(i - 1, '</section>')
-  if ctx.license_lines:
+  if ctx.emit_doc and ctx.license_lines:
     ctx.out(0, '<footer id="footer">\n', '<br />\n'.join(ctx.license_lines), '\n</footer>')
 
 
@@ -437,7 +446,7 @@ def convert_text(ctx: Ctx, text: str):
         break
   if prev_idx < len(text):
     converted.append(html_esc(text[prev_idx:]))
-  return ''.join(converted)
+  return ''.join(converted).strip()
 
 
 def span_conv(ctx: Ctx, text: str):
@@ -571,25 +580,41 @@ def embed_csv(ctx, f):
   return ''.join(table)
 
 
-def embed_txt(ctx, f):
-  return f'<pre>\n{f.read()}</pre>'
-
-
-embed_dispatch = {
-  '.csv'  : embed_csv,
-  '.txt'  : embed_txt,
-}
-
-def bind_exts(fn, *exts):
-  embed_dispatch.update((ext, fn) for ext in exts)
-
-
 def embed_direct(ctx, f):
   return f.read()
 
 
 def embed_img(ctx, f):
   return f'<img src={f.name}>'
+
+
+def embed_txt(ctx, f):
+  return f'<pre>\n{f.read()}</pre>'
+
+
+def embed_wu(ctx, f):
+  lines: List[str] = []
+  writeup_body(
+    out_lines=lines,
+    out_dependencies=ctx.dependencies,
+    src_path=f.name,
+    src_lines=f,
+    line_offset=0,
+    is_versioned=True,
+    emit_js=False,
+    emit_doc=False,
+    quote_depth=ctx.quote_depth)
+  return '\n'.join(lines)
+
+
+embed_dispatch = {
+  '.csv'  : embed_csv,
+  '.txt'  : embed_txt,
+  '.wu'   : embed_wu,
+}
+
+def bind_exts(fn, *exts):
+  embed_dispatch.update((ext, fn) for ext in exts)
 
 
 bind_exts(embed_direct, '.htm', '.html', '.svg')

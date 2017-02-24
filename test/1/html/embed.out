@@ -1,19 +1,9 @@
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>embed.wu</title>
-  <meta name="description" content="">
-  <meta name="author" content="">
-  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
-</head>
-<body id="body">
 <section class="S1" id="s1">
   <h1 id="h1">txt</h1>
   <p>
     <pre>
 Text contents.
 </pre>
-
   </p>
 </section>
 <section class="S1" id="s2">
@@ -23,8 +13,6 @@ Text contents.
     <p>
       <table>
 </tbody></table>
-
-
     </p>
   </section>
   <section class="S2" id="s2.2">
@@ -36,8 +24,6 @@ Text contents.
 <tr><td>1</td><td>2</td><td>3</td></tr>
 <tr><td>4</td><td>5</td><td>6</td></tr>
 </tbody></table>
-
-
     </p>
   </section>
 </section>
@@ -47,16 +33,11 @@ Text contents.
     <svg width="4em" height="4em" viewBox="0 0 4 4">
   <circle cx="2" cy="2" r="1"/>
 </svg>
-
-
   </p>
 </section>
 <section class="S1" id="s4">
   <h1 id="h4">img</h1>
   <p>
     <img src=test/assets/head.jpg> <img src=test/assets/head.gif> <img src=test/assets/head.png>
-
   </p>
 </section>
-</body>
-</html>

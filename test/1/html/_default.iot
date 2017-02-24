@@ -1,4 +1,4 @@
 {
-  'interpreter': '$PROJ/writeup/v0.py -bare',
+  'interpreter': '$PROJ/writeup/v0.py -frag',
   'links': 'test',
 }
