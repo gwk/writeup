@@ -1,4 +1,4 @@
 {
-  'cmd': "$PROJ/writeup/v0.py a a",
+  'cmd': "$PROJ/writeup/__main__.py a a",
   'err_val': "source path and destination path cannot be the same path: 'a'\n",
 }

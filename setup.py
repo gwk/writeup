@@ -18,7 +18,7 @@ setup(
   url='https://github.com/gwk/writeup',
   description='Writeup is a text markup format and standalone tool that translates to HTML5.',
   packages=['writeup'],
-  entry_points = {'console_scripts': ['writeup=writeup.v0:main']},
+  entry_points = {'console_scripts': ['writeup=writeup.__main__:main']},
   keywords=[
     'documentation', 'markup'
   ],
