@@ -58,7 +58,7 @@ def main() -> None:
       exit(f'writeup: css file does not exist: {args.css!r}')
 
   else:
-    html_lines = writeup(
+    html_lines = list(writeup(
       src_path=src_path,
       src_lines=f_in,
       title=split_ext(path_name(src_path))[0],
@@ -67,17 +67,23 @@ def main() -> None:
       css=minify_css('\n'.join(css)),
       js=(None if args.frag or args.no_js else minify_js(default_js)),
       emit_doc=(not args.frag),
-    )
+    ))
     for line in html_lines:
       print(line, file=f_out)
 
 
 def writeup(src_path: str, src_lines: Iterable[str], title: str, description: str, author: str,
-  css: Optional[str], js: Optional[str], emit_doc: bool) -> List[str]:
+  css: Optional[str], js: Optional[str], emit_doc: bool) -> Iterable[str]:
   'generate a complete html document from a writeup file (or stream of lines).'
 
+  ctx = writeup_body(
+    src_path=src_path,
+    src_lines=src_lines,
+    emit_js=bool(js),
+    emit_doc=emit_doc)
+
   if emit_doc:
-    html_lines = [
+    yield from [
       '<html>',
       '<head>',
       '  <meta charset="utf-8">',
@@ -87,42 +93,29 @@ def writeup(src_path: str, src_lines: Iterable[str], title: str, description: st
       '  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">', # empty icon.
     ]
     if css:
-      html_lines.append(f'  <style type="text/css">{css}</style>')
+      yield f'  <style type="text/css">{css}</style>'
     if js:
-      html_lines.append(f'  <script type="text/javascript"> "use strict";{js}</script>')
-    html_lines.append('</head>')
-    html_lines.append('<body id="body">')
-  else:
-    html_lines = []
+      yield f'  <script type="text/javascript"> "use strict";{js}</script>'
+    yield '</head>'
+    yield '<body id="body">'
 
-  writeup_body(
-    out_lines=html_lines,
-    out_dependencies=None,
-    src_path=src_path,
-    src_lines=src_lines,
-    emit_js=bool(js),
-    emit_doc=emit_doc,
-    )
+  yield from ctx.lines
+
   if emit_doc:
-    html_lines.append('</body>\n</html>')
-  return html_lines
+    yield '</body>\n</html>'
 
 
-def writeup_dependencies(src_path: str, src_lines: Iterable[str], dir_names: Optional[List[Any]] = None) -> List[str]:
+def writeup_dependencies(src_path: str, src_lines: Iterable[str], dir_names: Optional[List[Any]]=None) -> List[str]:
   '''
   Return a list of dependencies from the writeup in `src_lines`.
   `dir_names` is an ignored argument passed by the external `muck` tool.
   '''
-  dependencies = [] # type: List[str]
-  writeup_body(
-    out_lines=None,
-    out_dependencies=dependencies,
+  ctx = writeup_body(
     src_path=src_path,
     src_lines=src_lines,
     emit_js=False,
     emit_doc=False)
-  dependencies.sort()
-  return dependencies
+  return sorted(ctx.dependencies)
 
 
 # version pattern is applied to the first line of documents;
@@ -170,14 +163,13 @@ class Ctx:
   '''
   Structure for contextual information needed by a variety of functions called from `writeup_body`.
   '''
-  def __init__(self, search_dir: str, src_path: str, out: Callable[..., None], dependencies: Optional[list],
-   line_offset: int, quote_depth: int, emit_doc: bool) -> None:
+  def __init__(self, search_dir: str, src_path: str, line_offset: int, quote_depth: int, emit_doc: bool) -> None:
     self.search_dir = search_dir
     self.src_path = src_path
-    self.out = out
-    self.dependencies = dependencies
     self.quote_depth = quote_depth
     self.emit_doc = emit_doc
+    self.lines = []
+    self.dependencies = []
     self.section_ids = [] # type: List[str] # accumulated list of all section ids.
     self.paging_ids = [] # type: List[str] # accumulated list of all paging (level 1 & 2) section ids.
     self.section_stack = [] # type: List[int] # stack of currently open sections.
@@ -189,25 +181,24 @@ class Ctx:
     self.line_num = 0 # updated per line.
     self.warn = dummy_fn # type: Callable[..., None] # updated per line.
     self.error = dummy_fn # type: Callable[..., None] # updated per line.
+
   @property
   def section_depth(self) -> int:
     return len(self.section_stack)
 
+  def out(self, depth: int, *items: str) -> None:
+    self.lines.append(' ' * (depth * 2) + ''.join(items))
 
-def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
-  src_path: str, src_lines: Iterable[str], emit_js: bool, emit_doc: bool,
+  def dep(self, dependency: str) -> None:
+    self.dependencies.append(dependency)
+
+
+def writeup_body(src_path: str, src_lines: Iterable[str], emit_js: bool, emit_doc: bool,
   is_versioned=True, line_offset=0, quote_depth=0) -> None:
   'Convert input writeup in `src_lines` to output html lines and dependencies.'
 
-  if out_lines is None:
-    def out(depth: int, *items) -> None: pass
-  else:
-    def out(depth: int, *items) -> None:
-      s = ' ' * (depth * 2) + ''.join(items)
-      out_lines.append(s)
-
   ctx = Ctx(search_dir=path_dir(src_path) or '.', src_path=src_path,
-   out=out, dependencies=out_dependencies, line_offset=line_offset, quote_depth=quote_depth, emit_doc=emit_doc)
+    line_offset=line_offset, quote_depth=quote_depth, emit_doc=emit_doc)
 
   iter_src_lines = iter(src_lines)
 
@@ -259,12 +250,14 @@ def writeup_body(out_lines: Optional[list], out_dependencies: Optional[list],
 
   if emit_js:
     # Generate tables.
-    out(0, '<script type="text/javascript"> "use strict";')
+    ctx.out(0, '<script type="text/javascript"> "use strict";')
     section_ids = ','.join(f"'s{sid}'" for sid in ctx.section_ids)
-    out(0, f'section_ids = [{section_ids}];')
+    ctx.out(0, f'section_ids = [{section_ids}];')
     paging_ids = ','.join(f"'s{pid}'" for pid in ctx.paging_ids)
-    out(0, f"paging_ids = ['body', {paging_ids}];")
-    out(0, '</script>')
+    ctx.out(0, f"paging_ids = ['body', {paging_ids}];")
+    ctx.out(0, '</script>')
+
+  return ctx
 
 
 def writeup_line(ctx: Ctx, line: str, prev_state: int, state: int, groups) -> None:
@@ -329,10 +322,7 @@ def finish_code(ctx: Ctx) -> None:
 
 def finish_quote(ctx: Ctx) -> None:
   ctx.out(ctx.section_depth, '<blockquote>')
-  quoted_lines = [] # type: List[str]
-  writeup_body(
-    out_lines=quoted_lines,
-    out_dependencies=ctx.dependencies,
+  quote_ctx = writeup_body(
     src_path=ctx.src_path,
     src_lines=ctx.quote_lines,
     line_offset=ctx.quote_line_num,
@@ -340,7 +330,7 @@ def finish_quote(ctx: Ctx) -> None:
     emit_js=False,
     emit_doc=False,
     quote_depth=ctx.quote_depth + 1)
-  for ql in quoted_lines:
+  for ql in quote_ctx.lines:
     ctx.out(ctx.section_depth + 1, ql)
   ctx.out(ctx.section_depth, '</blockquote>')
   ctx.quote_lines.clear()
@@ -490,9 +480,7 @@ def span_embed(ctx: Ctx, tag: str, text: str):
   target_path = path_join(ctx.search_dir, text)
   if target_path.startswith('./'):
     target_path = target_path[2:]
-  if ctx.dependencies is not None:
-    ctx.dependencies.append(target_path)
-    return ''
+  ctx.dep(target_path)
   try: f = open(target_path)
   except FileNotFoundError:
     ctx.error(f'embedded file not found: {target_path!r}')
@@ -510,8 +498,7 @@ def span_link(ctx: Ctx, tag: str, text: str):
     ctx.error(f'link is empty: {tag!r}: {text!r}')
   if tag == 'link':
     link = words[0]
-    if ctx.dependencies is not None:
-      ctx.dependencies.append(words[0])
+    ctx.dep(words[0])
   else:
     link = f'{tag}:{words[0]}'
   if len(words) == 1:
@@ -594,7 +581,7 @@ def embed_txt(ctx, f):
 
 def embed_wu(ctx, f):
   lines: List[str] = []
-  writeup_body(
+  embed_ctx = writeup_body(
     out_lines=lines,
     out_dependencies=ctx.dependencies,
     src_path=f.name,
@@ -604,7 +591,7 @@ def embed_wu(ctx, f):
     emit_js=False,
     emit_doc=False,
     quote_depth=ctx.quote_depth)
-  return '\n'.join(lines)
+  return '\n'.join(embed_ctx.lines)
 
 
 embed_dispatch = {
