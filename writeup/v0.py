@@ -8,7 +8,7 @@ import re
 
 from argparse import ArgumentParser
 from html import escape as html_escape
-from os.path import dirname as path_dir, exists as path_exists, join as path_join, splitext as split_ext
+from os.path import dirname as path_dir, exists as path_exists, join as path_join, basename as path_name, splitext as split_ext
 from sys import stdin, stdout, stderr
 from typing import Any, Callable, Iterable, List, Optional, Sequence, Union, Tuple
 
@@ -61,7 +61,7 @@ def main() -> None:
     html_lines = writeup(
       src_path=src_path,
       src_lines=f_in,
-      title=src_path, # TODO.
+      title=split_ext(path_name(src_path))[0],
       description='', # TODO.
       author='', # TODO.
       css=minify_css('\n'.join(css)),
