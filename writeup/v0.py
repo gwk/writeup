@@ -76,7 +76,7 @@ def writeup(src_path: str, src_lines: Iterable[str], title: str, description: st
   css: Optional[str], js: Optional[str], emit_doc: bool) -> Iterable[str]:
   'generate a complete html document from a writeup file (or stream of lines).'
 
-  ctx = writeup_body(
+  ctx = Ctx(
     src_path=src_path,
     src_lines=src_lines,
     emit_js=bool(js),
@@ -110,7 +110,7 @@ def writeup_dependencies(src_path: str, src_lines: Iterable[str], dir_names: Opt
   Return a list of dependencies from the writeup in `src_lines`.
   `dir_names` is an ignored argument passed by the external `muck` tool.
   '''
-  ctx = writeup_body(
+  ctx = Ctx(
     src_path=src_path,
     src_lines=src_lines,
     emit_js=False,
@@ -161,13 +161,21 @@ def dummy_fn(fmt, *items):
 
 class Ctx:
   '''
-  Structure for contextual information needed by a variety of functions called from `writeup_body`.
+  Parser context.
+  Converts input writeup source text to output html lines and dependencies.
   '''
-  def __init__(self, search_dir: str, src_path: str, line_offset: int, quote_depth: int, emit_doc: bool) -> None:
-    self.search_dir = search_dir
+
+  def __init__(self, src_path: str, src_lines: Iterable[str], emit_doc: bool, emit_js: bool,
+   is_versioned=True, line_offset=0, quote_depth=0) -> None:
     self.src_path = src_path
-    self.quote_depth = quote_depth
+    self.src_lines = src_lines
     self.emit_doc = emit_doc
+    self.emit_js = emit_js
+    self.is_versioned = is_versioned
+    self.line_offset = line_offset
+    self.quote_depth = quote_depth
+
+    self.search_dir = path_dir(src_path) or '.'
     self.lines = []
     self.dependencies = []
     self.section_ids = [] # type: List[str] # accumulated list of all section ids.
@@ -182,6 +190,8 @@ class Ctx:
     self.warn = dummy_fn # type: Callable[..., None] # updated per line.
     self.error = dummy_fn # type: Callable[..., None] # updated per line.
 
+    parse(self)
+
   @property
   def section_depth(self) -> int:
     return len(self.section_stack)
@@ -193,17 +203,11 @@ class Ctx:
     self.dependencies.append(dependency)
 
 
-def writeup_body(src_path: str, src_lines: Iterable[str], emit_js: bool, emit_doc: bool,
-  is_versioned=True, line_offset=0, quote_depth=0) -> None:
-  'Convert input writeup in `src_lines` to output html lines and dependencies.'
-
-  ctx = Ctx(search_dir=path_dir(src_path) or '.', src_path=src_path,
-    line_offset=line_offset, quote_depth=quote_depth, emit_doc=emit_doc)
-
-  iter_src_lines = iter(src_lines)
+def parse(ctx: Ctx):
+  iter_src_lines = iter(ctx.src_lines)
 
   # Handle version line.
-  if is_versioned:
+  if ctx.is_versioned:
     try:
       version_line = next(iter_src_lines)
     except StopIteration:
@@ -213,12 +217,12 @@ def writeup_body(src_path: str, src_lines: Iterable[str], emit_js: bool, emit_do
       exit(f'writeup error: first line must specify writeup version matching pattern: {version_re.pattern!r}\n  found: {version_line!r}')
     version = int(m.group(1))
     if version != 0: exit(f'unsupported version number: {version}')
-    line_offset += 1
+    ctx.line_offset += 1
 
   # Iterate over lines.
   prev_state = s_start
-  ctx.line_num = line_offset
-  for line_num, line in enumerate(iter_src_lines, line_offset):
+  ctx.line_num = ctx.line_offset
+  for line_num, line in enumerate(iter_src_lines, ctx.line_offset):
     ctx.line_num = line_num
     # any license notice at top gets moved to a footer at the bottom of the html.
     if prev_state == s_start and license_re.fullmatch(line):
@@ -248,7 +252,7 @@ def writeup_body(src_path: str, src_lines: Iterable[str], emit_js: bool, emit_do
   ctx.line_num += 1
   writeup_line(ctx=ctx, line='\n', prev_state=prev_state, state=s_end, groups=None)
 
-  if emit_js:
+  if ctx.emit_js:
     # Generate tables.
     ctx.out(0, '<script type="text/javascript"> "use strict";')
     section_ids = ','.join(f"'s{sid}'" for sid in ctx.section_ids)
@@ -256,8 +260,6 @@ def writeup_body(src_path: str, src_lines: Iterable[str], emit_js: bool, emit_do
     paging_ids = ','.join(f"'s{pid}'" for pid in ctx.paging_ids)
     ctx.out(0, f"paging_ids = ['body', {paging_ids}];")
     ctx.out(0, '</script>')
-
-  return ctx
 
 
 def writeup_line(ctx: Ctx, line: str, prev_state: int, state: int, groups) -> None:
@@ -322,7 +324,7 @@ def finish_code(ctx: Ctx) -> None:
 
 def finish_quote(ctx: Ctx) -> None:
   ctx.out(ctx.section_depth, '<blockquote>')
-  quote_ctx = writeup_body(
+  quote_ctx = Ctx(
     src_path=ctx.src_path,
     src_lines=ctx.quote_lines,
     line_offset=ctx.quote_line_num,
@@ -581,7 +583,7 @@ def embed_txt(ctx, f):
 
 def embed_wu(ctx, f):
   lines: List[str] = []
-  embed_ctx = writeup_body(
+  embed_ctx = Ctx(
     out_lines=lines,
     out_dependencies=ctx.dependencies,
     src_path=f.name,
