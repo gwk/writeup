@@ -183,7 +183,7 @@ class Ctx:
     self.section_stack = [] # type: List[int] # stack of currently open sections.
     self.list_depth = 0 # currently open list depth.
     self.license_lines = [] # type: List[str]
-    self.pre_lines = [] # type: List[str]
+    self.code_lines = [] # type: List[str]
     self.quote_line_num = 0
     self.quote_lines = [] # type: List[str]
     self.line_num = 0 # updated per line.
@@ -317,9 +317,9 @@ def finish_code(ctx: Ctx) -> None:
   # a newline after the `pre` open tag looks ok,
   # but a final newline between content and the `pre` close tag looks bad.
   # therefore we must take care to format the contents without a final newline.
-  contents = '\n'.join(ctx.pre_lines)
+  contents = '\n'.join(ctx.code_lines)
   ctx.out(0, f'<pre>\n{contents}</pre>')
-  ctx.pre_lines.clear()
+  ctx.code_lines.clear()
 
 
 def finish_quote(ctx: Ctx) -> None:
@@ -381,7 +381,7 @@ def output_list(ctx: Ctx, groups: Sequence[str], is_first: bool):
 
 def output_code(ctx: Ctx, groups: Sequence[str], is_first: bool):
   text, = groups
-  ctx.pre_lines.append(html_esc(text))
+  ctx.code_lines.append(html_esc(text))
 
 
 def output_quote(ctx: Ctx, groups: Sequence[str], is_first: bool):
