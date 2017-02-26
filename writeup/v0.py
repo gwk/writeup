@@ -118,6 +118,53 @@ def writeup_dependencies(src_path: str, src_lines: Iterable[str], dir_names: Opt
   return sorted(ctx.dependencies)
 
 
+class Span:
+  def __init__(self, attrs, text):
+    self.attrs = attrs
+    self.text = text
+
+
+class Block:
+  'A tree node of block-level HTML content.'
+
+
+class Section(Block):
+  def __init__(self, index_path: Tuple[int, ...], title: str, children: List[Block]):
+    self.index_path = index_path
+    self.title = title
+    self.children = children
+
+  def __repr__(self): return f'Section({self.sid}, {self.title!r})'
+
+  @property
+  def sid(self): return '.'.join(str(i) for i in self.index_path)
+
+
+class UList(Block):
+  def __init__(self, items: List[Block]):
+    self.items = items
+
+
+class Quote(Block):
+  def __init__(self, blocks: List[Block]):
+    self.blocks = blocks
+
+
+class Code(Block):
+  def __init__(self, lines: List[str]):
+    self.lines = lines
+
+
+class Text(Block):
+  def __init__(self, lines: List[str]):
+    self.lines = lines
+
+
+class Line:
+  def __int__(self, spans: List[Span]):
+    self.spans = spans
+
+
 # version pattern is applied to the first line of documents;
 # programs processing input strings may or may not check for a version as appropriate.
 version_re = re.compile(r'writeup v(\d+)\n')
@@ -342,21 +389,25 @@ def output_section(ctx: Ctx, groups: Sequence[str], is_first: bool):
   hashes, spaces, text = groups
   check_whitespace(ctx.warn, 1, spaces)
   depth = len(hashes)
-  h_num = min(6, depth)
-  prev_index = 0
-  while ctx.section_depth >= depth: # close previous peer section and its children.
-    sid = '.'.join(str(i) for i in ctx.section_stack)
-    prev_index = ctx.section_stack.pop()
-    ctx.out(ctx.section_depth, '</section>')
-  while ctx.section_depth < depth: # open new section and any children.
-    index = prev_index + 1
-    ctx.section_stack.append(index)
-    d = ctx.section_depth
-    sid = '.'.join(str(i) for i in ctx.section_stack)
-    quote_prefix = f'q{ctx.quote_depth}' if ctx.quote_depth else ''
-    ctx.out(d - 1, f'<section class="S{d}" id="{quote_prefix}s{sid}">')
+  if ctx.section_stack == []: # first/intro case only.
+    index_path = (0,) # intro section is indexed 0; everything else is 1-indexed.
+  elif depth > ctx.section_depth + 1:
+      ctx.error(f'missing parent section of depth {ctx.section_depth+1}')
+  else: # normal case.
     prev_index = 0
-  # current.
+    while ctx.section_depth >= depth: # close previous peer section and any children.
+      prev = ctx.section_stack.pop()
+      ctx.out(ctx.section_depth, '</section>')
+      prev_index = prev.index_path[depth-1]
+    parent_path = ctx.section_stack[-1].index_path if ctx.section_depth else ()
+    index_path = parent_path + (prev_index+1,)
+  section = Section(index_path=index_path, title=text, children=[])
+  ctx.section_stack.append(section)
+  d = ctx.section_depth
+  sid = section.sid
+  quote_prefix = f'q{ctx.quote_depth}' if ctx.quote_depth else ''
+  ctx.out(d - 1, f'<section class="S{d}" id="{quote_prefix}s{sid}">')
+  h_num = min(6, depth)
   ctx.out(depth, f'<h{h_num} id="h{sid}">{convert_text(ctx, text)}</h{h_num}>')
   ctx.section_ids.append(sid)
   if depth <= 2:
@@ -708,7 +759,7 @@ section.S4 { margin: 1.2rem 0; }
 section.S5 { margin: 1.1rem 0; }
 section.S6 { margin: 1.0rem 0; }
 
-section#s1 {
+section#s0 {
   border-top-width: 0;
 }
 

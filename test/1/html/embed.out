@@ -1,22 +1,22 @@
-<section class="S1" id="s1">
-  <h1 id="h1">txt</h1>
+<section class="S1" id="s0">
+  <h1 id="h0">txt</h1>
   <p>
     <pre>
 Text contents.
 </pre>
   </p>
 </section>
-<section class="S1" id="s2">
-  <h1 id="h2">csv</h1>
-  <section class="S2" id="s2.1">
-    <h2 id="h2.1">empty</h2>
+<section class="S1" id="s1">
+  <h1 id="h1">csv</h1>
+  <section class="S2" id="s1.1">
+    <h2 id="h1.1">empty</h2>
     <p>
       <table>
 </tbody></table>
     </p>
   </section>
-  <section class="S2" id="s2.2">
-    <h2 id="h2.2">non-empty</h2>
+  <section class="S2" id="s1.2">
+    <h2 id="h1.2">non-empty</h2>
     <p>
       <table>
 <thead><tr><th>A</th><th>B</th><th>C</th></tr></thead>
@@ -27,16 +27,16 @@ Text contents.
     </p>
   </section>
 </section>
-<section class="S1" id="s3">
-  <h1 id="h3">svg</h1>
+<section class="S1" id="s2">
+  <h1 id="h2">svg</h1>
   <p>
     <svg width="4em" height="4em" viewBox="0 0 4 4">
   <circle cx="2" cy="2" r="1"/>
 </svg>
   </p>
 </section>
-<section class="S1" id="s4">
-  <h1 id="h4">img</h1>
+<section class="S1" id="s3">
+  <h1 id="h3">img</h1>
   <p>
     <img src=test/assets/head.jpg> <img src=test/assets/head.gif> <img src=test/assets/head.png>
   </p>

@@ -1,11 +1,11 @@
 writeup v0
 
-# Basic
+# Title
 
-# Header 1
+# Section 1
 Paragraph 1 line 1.
 Paragraph 1 line 2.
-`code span`. <b: bold text>. <span: style=color:red; span style RED>.
+`code span`. <b: bold text>. <span: style=color:red; span style red>.
 
 Paragraph 2.
 
@@ -17,22 +17,22 @@ List:
 * C
 Post-list.
 
-## Header 2
+## Section 1.1
 Line 2.
 Line 3.
 
 
-# Blockquote
+# Section 2: Quote
 > # Header
 > Text.
 > List:
 > * A
 >   * B
 >
->> Double Blockquote.
->| Pre.
+>> Double quote.
+>| Quoted code.
 
-# Pre
+# Section 3: Code
 | # Header 1
-| Paragraph 1 line 1.
-| Paragraph 1 line 2. `code span`.
+| Line 1.
+| Line 2. `code span`.
