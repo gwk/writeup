@@ -179,11 +179,11 @@ s_start, s_license, s_section, s_list, s_quote, s_code, s_blank, s_text, s_end =
 state_letters = '_©SLQCBTE'
 
 matchers = [
-  (s_section, re.compile(r'(#+)(\s*)(.*)\n')),
-  (s_list,    re.compile(r'(\s*)\*(\s*)(.*)\n')),
-  (s_quote,   re.compile(r'> ?(.*\n)')),
-  (s_code,    re.compile(r'\| ?(.*)\n')),
-  (s_blank,   re.compile(r'(\s*)\n')),
+  (s_section, re.compile(r'(#+)(\s*)(.*)')),
+  (s_list,    re.compile(r'(\s*)\*(\s*)(.*)')),
+  (s_quote,   re.compile(r'> ?(.*)')),
+  (s_code,    re.compile(r'\| ?(.*)')),
+  (s_blank,   re.compile(r'(\s*)')),
 ]
 
 # span regexes.
@@ -201,11 +201,6 @@ span_pat = r'<((?:[^\\>]|\\>|\\\\)*)>'
 span_esc_re = re.compile(r'\\>|\\\\') # escapes span strings.
 
 
-def dummy_fn(fmt, *items):
-  'Never called; used as an initialization placeholder for Ctx.warn and Ctx.error.'
-  raise Exception('unreachable')
-
-
 class Ctx:
   '''
   Parser context.
@@ -213,12 +208,13 @@ class Ctx:
   '''
 
   def __init__(self, src_path: str, src_lines: Iterable[str], emit_doc: bool, emit_js: bool,
-   is_versioned=True, line_offset=0, quote_depth=0) -> None:
+   is_versioned=True, warn_missing_final_newline=True, line_offset=0, quote_depth=0) -> None:
     self.src_path = src_path
     self.src_lines = src_lines
     self.emit_doc = emit_doc
     self.emit_js = emit_js
     self.is_versioned = is_versioned
+    self.warn_missing_final_newline = warn_missing_final_newline
     self.line_offset = line_offset
     self.quote_depth = quote_depth
 
@@ -233,10 +229,8 @@ class Ctx:
     self.code_lines = [] # type: List[str]
     self.quote_line_num = 0
     self.quote_lines = [] # type: List[str]
+    self.line = '' # updated per line.
     self.line_num = 0 # updated per line.
-    self.warn = dummy_fn # type: Callable[..., None] # updated per line.
-    self.error = dummy_fn # type: Callable[..., None] # updated per line.
-
     parse(self)
 
   @property
@@ -248,6 +242,17 @@ class Ctx:
 
   def dep(self, dependency: str) -> None:
     self.dependencies.append(dependency)
+
+  def warn(self, *items):
+    errSL(f'writeup warning: {self.src_path}:{self.line_num+1}:', *items)
+    errSL(f'  {self.line!r}')
+
+  def error(self, *items):
+    errSL(f'writeup error: {self.src_path}:{self.line_num+1}:', *items)
+    errSL(f'  {self.line!r}')
+    exit(1)
+
+
 
 
 def parse(ctx: Ctx):
@@ -269,17 +274,21 @@ def parse(ctx: Ctx):
   # Iterate over lines.
   prev_state = s_start
   ctx.line_num = ctx.line_offset
-  for line_num, line in enumerate(iter_src_lines, ctx.line_offset):
+  for line_num, raw_line in enumerate(iter_src_lines, ctx.line_offset):
+    line = raw_line.rstrip('\n')
+    ctx.line = line
     ctx.line_num = line_num
+    if ctx.warn_missing_final_newline and not raw_line.endswith('\n'):
+      ctx.warn('missing final newline.')
+
     # any license notice at top gets moved to a footer at the bottom of the html.
     if prev_state == s_start and license_re.fullmatch(line):
       ctx.license_lines.append(line.strip())
       prev_state = s_license
       continue
     if prev_state == s_license: # consume remaining license lines.
-      l = line.strip()
-      if l: # not empty.
-        ctx.license_lines.append(l)
+      if line.strip(): # not blank.
+        ctx.license_lines.append(line)
         continue # remain in s_license.
 
     # license has ended; determine state.
@@ -292,12 +301,13 @@ def parse(ctx: Ctx):
         groups = m.groups()
         break
 
-    writeup_line(ctx=ctx, raw_line=line, prev_state=prev_state, state=state, groups=groups)
+    writeup_line(ctx=ctx, prev_state=prev_state, state=state, groups=groups)
     prev_state = state
 
   # Finish.
+  ctx.line = ''
   ctx.line_num += 1
-  writeup_line(ctx=ctx, raw_line='\n', prev_state=prev_state, state=s_end, groups=None)
+  writeup_line(ctx=ctx, prev_state=prev_state, state=s_end, groups=None)
 
   if ctx.emit_js:
     # Generate tables.
@@ -309,25 +319,10 @@ def parse(ctx: Ctx):
     ctx.out(0, '</script>')
 
 
-def writeup_line(ctx: Ctx, raw_line: str, prev_state: int, state: int, groups) -> None:
+def writeup_line(ctx: Ctx, prev_state: int, state: int, groups) -> None:
   'Inner function to process a line.'
-  line = raw_line.rstrip()
-  #errSL(f'{ctx.line_num:03} {state_letters[prev_state]}{state_letters[state]}: {line}')
 
-  def warn(*items):
-    errSL(f'writeup warning: {ctx.src_path}:{ctx.line_num+1}:', *items)
-    errSL(f'  {line!r}')
-
-  def error(*items):
-    errSL(f'writeup error: {ctx.src_path}:{ctx.line_num+1}:', *items)
-    errSL(f'  {line!r}')
-    exit(1)
-
-  ctx.warn = warn
-  ctx.error = error
-
-  if not raw_line.endswith('\n'):
-    warn('missing final newline')
+  #errSL(f'{ctx.line_num:03} {state_letters[prev_state]}{state_letters[state]}: {ctx.line}')
 
   # Some transitions between states result in actions.
 
@@ -376,6 +371,7 @@ def finish_quote(ctx: Ctx) -> None:
     src_lines=ctx.quote_lines,
     line_offset=ctx.quote_line_num,
     is_versioned=False,
+    warn_missing_final_newline=False,
     emit_js=False,
     emit_doc=False,
     quote_depth=ctx.quote_depth + 1)
