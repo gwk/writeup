@@ -292,12 +292,12 @@ def parse(ctx: Ctx):
         groups = m.groups()
         break
 
-    writeup_line(ctx=ctx, line=line, prev_state=prev_state, state=state, groups=groups)
+    writeup_line(ctx=ctx, raw_line=line, prev_state=prev_state, state=state, groups=groups)
     prev_state = state
 
   # Finish.
   ctx.line_num += 1
-  writeup_line(ctx=ctx, line='\n', prev_state=prev_state, state=s_end, groups=None)
+  writeup_line(ctx=ctx, raw_line='\n', prev_state=prev_state, state=s_end, groups=None)
 
   if ctx.emit_js:
     # Generate tables.
@@ -309,25 +309,25 @@ def parse(ctx: Ctx):
     ctx.out(0, '</script>')
 
 
-def writeup_line(ctx: Ctx, line: str, prev_state: int, state: int, groups) -> None:
+def writeup_line(ctx: Ctx, raw_line: str, prev_state: int, state: int, groups) -> None:
   'Inner function to process a line.'
-
-  #errZ(f'{ctx.line_num:03} {state_letters[prev_state]}{state_letters[state]}: {line}')
+  line = raw_line.rstrip()
+  #errSL(f'{ctx.line_num:03} {state_letters[prev_state]}{state_letters[state]}: {line}')
 
   def warn(*items):
-    errSL(f'writeup warning: {ctx.src_path}:{ctx.line_num+1}: ', *items)
+    errSL(f'writeup warning: {ctx.src_path}:{ctx.line_num+1}:', *items)
     errSL(f'  {line!r}')
 
   def error(*items):
-    errSL(f'writeup error: {ctx.src_path}:{ctx.line_num+1}: ', *items)
+    errSL(f'writeup error: {ctx.src_path}:{ctx.line_num+1}:', *items)
     errSL(f'  {line!r}')
     exit(1)
 
   ctx.warn = warn
   ctx.error = error
 
-  if not line.endswith('\n'):
-    warn("missing newline ('\\n')")
+  if not raw_line.endswith('\n'):
+    warn('missing final newline')
 
   # Some transitions between states result in actions.
 
@@ -670,9 +670,6 @@ def html_esc_attr(text: str):
 
 
 # Error reporting.
-
-def errZ(*items):
-  print(*items, sep='', end='', file=stderr) #!cov-ignore.
 
 def errSL(*items):
   print(*items, file=stderr)
