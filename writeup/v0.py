@@ -187,21 +187,6 @@ matchers = [
   (s_blank,   re.compile(r'(\s*)')),
 ]
 
-# span regexes.
-# general pattern for quoting with escapes is Q([^EQ]|EQ|EE)*Q.
-# it is crucial that the escape character E is excluded in the '[^EQ]' clause,
-# or else when matching against 'QEQQ', the pattern greedily matches 'QEQ'.
-# to allow a trailing escape character, the 'EE' clause is also required.
-
-# backtick code span.
-span_code_pat = r'`((?:[^\\`]|\\`|\\\\)*)`' # finds code spans.
-span_code_esc_re = re.compile(r'\\`|\\\\') # escapes code strings.
-
-# generic angle bracket span.
-span_pat = r'<((?:[^\\>]|\\>|\\\\)*)>'
-span_esc_re = re.compile(r'\\>|\\\\') # escapes span strings.
-
-
 class Ctx:
   '''
   Parser context.
@@ -473,22 +458,22 @@ def convert_text(ctx: Ctx, text: str):
   'convert writeup span elements in a text string to html.'
   converted = []
   prev_idx = 0
+  def flush(curr_idx):
+    if prev_idx < curr_idx:
+      converted.append(html_esc(text[prev_idx:curr_idx]))
   for m in span_re.finditer(text):
     start_idx = m.start()
-    if prev_idx < start_idx: # flush preceding text.
-      converted.append(html_esc(text[prev_idx:start_idx]))
+    flush(start_idx)
     prev_idx = m.end()
-    for i, (pattern, fn) in enumerate(span_kinds, 1): # groups are 1-indexed.
-      group = m.group(i)
-      if group is not None:
-        converted.append(fn(ctx, group))
-        break
-  if prev_idx < len(text):
-    converted.append(html_esc(text[prev_idx:]))
+    i = m.lastindex or 0
+    fn = span_fns[i]
+    group = m.group(i)
+    converted.append(fn(ctx, group))
+  flush(len(text))
   return ''.join(converted).strip()
 
 
-def span_conv(ctx: Ctx, text: str):
+def span_angle_conv(ctx: Ctx, text: str):
   'convert generic angle bracket span to html.'
   tag, colon, body = text.partition(':')
   if colon is None: ctx.error(f'malformed span is missing colon after tag: {text!r}')
@@ -508,15 +493,34 @@ def span_code_conv(ctx: Ctx, text: str):
   return f'<code>{text_spaced}</code>'
 
 
+def span_text_conv(ctx: Ctx, text: str):
+  return html_esc(text)
+
+
+# span regexes.
+# general pattern for quoting with escapes is Q([^EQ]|EQ|EE)*Q.
+# it is crucial that the escape character E is excluded in the '[^EQ]' clause,
+# or else when matching against 'QEQQ', the pattern greedily matches 'QEQ'.
+# to allow a trailing escape character, the 'EE' clause is also required.
+
+# backtick code span.
+span_code_pat = r'`((?:[^\\`]|\\`|\\\\)*)`' # finds code spans.
+span_code_esc_re = re.compile(r'\\`|\\\\') # escapes code strings.
+
+# generic angle bracket span.
+span_angle_pat = r'<((?:[^\\>]|\\>|\\\\)*)>'
+span_angle_esc_re = re.compile(r'\\>|\\\\') # escapes span strings.
+
 # span patterns and associated handlers.
-span_kinds = [
+span_pairs = (
   (span_code_pat, span_code_conv),
-  (span_pat,      span_conv),
-]
+  (span_angle_pat, span_angle_conv),
+)
 
-# single re, wrapping each span sub-pattern in capturing parentheses.
-span_re = re.compile('|'.join(p for p, _, in span_kinds))
+span_fns = (None,) + tuple(f for _, f in span_pairs) # Match.group() is 1-indexed.
 
+span_re = re.compile('|'.join(p for p, _ in span_pairs))
+#^ wraps each span sub-pattern in capturing parentheses.
 
 # generic angle bracket spans.
 
