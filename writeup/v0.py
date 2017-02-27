@@ -119,9 +119,15 @@ def writeup_dependencies(src_path: str, src_lines: Iterable[str], dir_names: Opt
 
 
 class Span:
+  'A tree node of inline HTML content.'
   def __init__(self, attrs, text):
     self.attrs = attrs
     self.text = text
+
+
+class Line:
+  def __int__(self, spans: List[Span]):
+    self.spans = spans
 
 
 class Block:
@@ -156,35 +162,29 @@ class Code(Block):
 
 
 class Text(Block):
-  def __init__(self, lines: List[str]):
+  def __init__(self, lines: List[Line]):
     self.lines = lines
 
 
-class Line:
-  def __int__(self, spans: List[Span]):
-    self.spans = spans
-
-
+version_re = re.compile(r'writeup v(\d+)\n')
 # version pattern is applied to the first line of documents;
 # programs processing input strings may or may not check for a version as appropriate.
-version_re = re.compile(r'writeup v(\d+)\n')
 
-# license pattern is is only applied to the first line (following the version line, if any).
 license_re = re.compile(r'(©|Copyright|Dedicated to the public domain).*\n')
+# license pattern is is only applied to the first line (following the version line, if any).
 
 # line states.
-s_start, s_license, s_section, s_list, s_quote, s_code, s_blank, s_text, s_end = range(9)
+s_start, s_license, s_section, s_list, s_quote, s_code, s_text, s_blank, s_end = range(9)
 
-# for debug output only.
-state_letters = '_©SLQCBTE'
+state_letters = '_©SLQCTBE' # for debug output only.
 
 matchers = [
   (s_section, re.compile(r'(#+)(\s*)(.*)')),
   (s_list,    re.compile(r'(\s*)\*(\s*)(.*)')),
   (s_quote,   re.compile(r'(\s*)> ?(.*)')),
   (s_code,    re.compile(r'(\s*)\| ?(.*)')),
-  (s_blank,   re.compile(r'(\s*)')),
   (s_text,    re.compile(r'(\s*)(.+)')),
+  (s_blank,   re.compile(r'(\s*)')),
 ]
 
 # span regexes.
@@ -649,12 +649,12 @@ embed_dispatch = {
   '.wu'   : embed_wu,
 }
 
-def bind_exts(fn, *exts):
+def _add_embed(fn, *exts):
   embed_dispatch.update((ext, fn) for ext in exts)
 
 
-bind_exts(embed_direct, '.htm', '.html', '.svg')
-bind_exts(embed_img, '.gif', '.jpeg', '.jpg', '.png')
+_add_embed(embed_direct, '.htm', '.html', '.svg')
+_add_embed(embed_img, '.gif', '.jpeg', '.jpg', '.png')
 
 # HTML escaping.
 
