@@ -58,14 +58,14 @@
           Double quote.
         </p>
       </blockquote>
-    <pre>
+      <pre>
 Quoted code.</pre>
     </section>
   </blockquote>
 </section>
 <section class="S1" id="s3">
   <h1 id="h3">Section 3: Code</h1>
-<pre>
+  <pre>
 # Header 1
 Line 1.
 Line 2. `code span`.</pre>
