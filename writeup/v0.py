@@ -135,7 +135,7 @@ class Block:
 
 
 class Section(Block):
-  def __init__(self, index_path: Tuple[int, ...], title: str, children: List[Block]):
+  def __init__(self, index_path: Tuple[int, ...], title: Line, children: List[Block]):
     self.index_path = index_path
     self.title = title
     self.children = children
@@ -239,8 +239,6 @@ class Ctx:
     exit(1)
 
 
-
-
 def parse(ctx: Ctx):
   iter_src_lines = iter(ctx.src_lines)
 
@@ -334,6 +332,15 @@ def writeup_line(ctx: Ctx, prev_state: int, state: int, groups) -> None:
   else: error(f'bad state: {state}')
 
 
+def pop_sections_to_depth(ctx: Ctx, depth: int):
+  prev_index = 0
+  while ctx.section_depth > depth:
+    prev = ctx.section_stack.pop()
+    ctx.out(ctx.section_depth, '</section>')
+    prev_index = prev.index_path[depth]
+  return prev_index
+
+
 def finish_list(ctx: Ctx) -> None:
   for i in range(ctx.list_depth, 0, -1):
     ctx.out(ctx.section_depth + (i - 1), '</ul>')
@@ -375,11 +382,7 @@ def output_section(ctx: Ctx, groups: Sequence[str], is_first: bool):
   elif depth > ctx.section_depth + 1:
       ctx.error(f'missing parent section of depth {ctx.section_depth+1}')
   else: # normal case.
-    prev_index = 0
-    while ctx.section_depth >= depth: # close previous peer section and any children.
-      prev = ctx.section_stack.pop()
-      ctx.out(ctx.section_depth, '</section>')
-      prev_index = prev.index_path[depth-1]
+    prev_index = pop_sections_to_depth(ctx, depth - 1)
     parent_path = ctx.section_stack[-1].index_path if ctx.section_depth else ()
     index_path = parent_path + (prev_index+1,)
   section = Section(index_path=index_path, title=text, children=[])
@@ -437,8 +440,7 @@ def output_blank(ctx: Ctx, groups: Sequence[str], is_first: bool):
 
 
 def output_end(ctx: Ctx, groups: Sequence[str], is_first: bool):
-  for i in range(ctx.section_depth, 0, -1):
-    ctx.out(i - 1, '</section>')
+  pop_sections_to_depth(ctx, 0)
   if ctx.emit_doc and ctx.license_lines:
     ctx.out(0, '<footer id="footer">\n', '<br />\n'.join(ctx.license_lines), '\n</footer>')
 
