@@ -181,9 +181,10 @@ state_letters = '_©SLQCBTE'
 matchers = [
   (s_section, re.compile(r'(#+)(\s*)(.*)')),
   (s_list,    re.compile(r'(\s*)\*(\s*)(.*)')),
-  (s_quote,   re.compile(r'> ?(.*)')),
-  (s_code,    re.compile(r'\| ?(.*)')),
+  (s_quote,   re.compile(r'(\s*)> ?(.*)')),
+  (s_code,    re.compile(r'(\s*)\| ?(.*)')),
   (s_blank,   re.compile(r'(\s*)')),
+  (s_text,    re.compile(r'(\s*)(.+)')),
 ]
 
 # span regexes.
@@ -292,14 +293,13 @@ def parse(ctx: Ctx):
         continue # remain in s_license.
 
     # license has ended; determine state.
-    state = s_text # default if no patterns match.
-    groups = (line,) # type: Sequence[str] # hack for output_text.
     for s, r in matchers:
       m = r.fullmatch(line)
       if m:
         state = s
         groups = m.groups()
         break
+    else: raise AssertionError('text regex failed to match')
 
     writeup_line(ctx=ctx, prev_state=prev_state, state=state, groups=groups)
     prev_state = state
@@ -427,12 +427,12 @@ def output_list(ctx: Ctx, groups: Sequence[str], is_first: bool):
 
 
 def output_code(ctx: Ctx, groups: Sequence[str], is_first: bool):
-  text, = groups
+  indents, text = groups
   ctx.code_lines.append(html_esc(text))
 
 
 def output_quote(ctx: Ctx, groups: Sequence[str], is_first: bool):
-  quoted_line, = groups
+  indents, quoted_line = groups
   if is_first:
     ctx.quote_line_num = ctx.line_num
   ctx.quote_lines.append(quoted_line) # not converted here; text is fully transformed by finish_quote.
@@ -440,7 +440,7 @@ def output_quote(ctx: Ctx, groups: Sequence[str], is_first: bool):
 
 def output_text(ctx: Ctx, groups: Sequence[str], is_first: bool):
   # TODO: check for strange characters that html will ignore.
-  text, = groups
+  indents, text = groups
   if is_first:
     ctx.out(ctx.section_depth, '<p>')
   ctx.out(ctx.section_depth + 1, convert_text(ctx, text))
