@@ -10,7 +10,7 @@ from argparse import ArgumentParser
 from html import escape as html_escape
 from os.path import dirname as path_dir, exists as path_exists, join as path_join, basename as path_name, splitext as split_ext
 from sys import stdin, stdout, stderr
-from typing import Any, Callable, Iterable, List, Optional, Sequence, Union, Tuple
+from typing import re as Re, Any, Callable, Dict, Iterable, List, Optional, Sequence, Union, Tuple
 
 
 __all__ = ['main', 'writeup', 'writeup_dependencies']
@@ -178,14 +178,27 @@ s_start, s_license, s_section, s_list, s_quote, s_code, s_text, s_blank, s_end =
 
 state_letters = '_©SLQCTBE' # for debug output only.
 
-matchers = [
-  (s_section, re.compile(r'(\s*)(#+)(\s*)(.*)')),
-  (s_list,    re.compile(r'(\s*)\*(\s*)(.*)')),
-  (s_quote,   re.compile(r'(\s*)> ?(.*)')),
-  (s_code,    re.compile(r'(\s*)\| ?(.*)')),
-  (s_text,    re.compile(r'(\s*)(.+)')),
-  (s_blank,   re.compile(r'(\s*)')),
-]
+line_re = re.compile(r'''(?x:
+(?P<indents> \s* )
+(?:
+  (?P<section_hashes>\#+) (?P<section_spaces> \s* ) (?P<section_title> .* )
+| (?P<list_star> \* ) (?P<list_spaces> \s* ) (?P<list_contents> .+ )
+| (?P<quote_angle> > ) \ ? (?P<quote> .* )
+| (?P<code_bar> \| ) \ ? (?P<code> .* )
+| (?P<text> .+ )
+| (?P<blank>)
+)
+)''')
+
+line_groups_to_states = {
+  'section_title' : s_section,
+  'list_contents' : s_list,
+  'quote' : s_quote,
+  'code': s_code,
+  'text': s_text,
+  'blank': s_blank,
+}
+
 
 class Ctx:
   '''
@@ -275,22 +288,16 @@ def parse(ctx: Ctx):
         ctx.license_lines.append(line)
         continue # remain in s_license.
 
-    # license has ended; determine state.
-    for s, r in matchers:
-      m = r.fullmatch(line)
-      if m:
-        state = s
-        groups = m.groups()
-        break
-    else: raise AssertionError('text regex failed to match')
-
-    writeup_line(ctx=ctx, prev_state=prev_state, state=state, groups=groups)
+    # normal line.
+    m = line_re.fullmatch(line)
+    state = line_groups_to_states[m.lastgroup]
+    writeup_line(ctx=ctx, prev_state=prev_state, state=state, indents=m['indents'], m=m)
     prev_state = state
 
   # Finish.
   ctx.line = ''
   ctx.line_num += 1
-  writeup_line(ctx=ctx, prev_state=prev_state, state=s_end, groups=('',))
+  writeup_line(ctx=ctx, prev_state=prev_state, state=s_end, indents='', m=None)
 
   if ctx.emit_js:
     # Generate tables.
@@ -302,19 +309,18 @@ def parse(ctx: Ctx):
     ctx.out(0, '</script>')
 
 
-def writeup_line(ctx: Ctx, prev_state: int, state: int, groups: Tuple[str, ...]) -> None:
+def writeup_line(ctx: Ctx, prev_state: int, state: int, indents: str, m=Optional[Re.Match]) -> None:
   'Inner function to process a line.'
 
   #errSL(f'{ctx.line_num:03} {state_letters[prev_state]}{state_letters[state]}: {ctx.line}')
 
-  indents = groups[0]
   check_whitespace(ctx, -1, indents, ' in indent')
   l = len(indents)
   if l % 2: ctx.warn(f'odd indentation length: {l}.')
   list_depth = l // 2
   if ctx.list_depth < list_depth:
     ctx.error(f'indent implies missing parent list of depth {ctx.list_depth+1}')
-  list_depth_changed = (ctx.list_depth != list_depth)
+  list_depth_changed = (ctx.list_depth != list_depth and state != s_blank)
 
   # Some transitions between states/depths require handling.
   if prev_state == s_code:
@@ -329,18 +335,19 @@ def writeup_line(ctx: Ctx, prev_state: int, state: int, groups: Tuple[str, ...])
     else:
       ctx.out(ctx.section_depth + ctx.list_depth, '<br />')
 
-  if state != s_list:
+  if state not in (s_list, s_blank):
     pop_lists_to_depth(ctx, list_depth)
 
   is_first = (prev_state != state) or list_depth_changed
 
-  if state == s_section: output_section(ctx, groups, is_first)
-  elif state == s_list: output_list(ctx, groups, is_first, list_depth)
-  elif state == s_code: output_code(ctx, groups, is_first)
-  elif state == s_quote: output_quote(ctx, groups, is_first)
-  elif state == s_blank: output_blank(ctx, groups, is_first)
-  elif state == s_text: output_text(ctx, groups, is_first)
-  elif state == s_end: output_end(ctx, groups, is_first)
+  if state == s_section: output_section(ctx, hashes=m['section_hashes'], spaces=m['section_spaces'], title=m['section_title'])
+  elif state == s_list: output_list(ctx, list_depth, spaces=m['list_spaces'], contents=m['list_contents'])
+  elif state == s_code: output_code(ctx, code=m['code'])
+  elif state == s_quote: output_quote(ctx, is_first, quote=m['quote'])
+  elif state == s_text: output_text(ctx, is_first, text=m['text'])
+  elif state == s_blank:
+    if len(indents): ctx.warn('blank line is not empty')
+  elif state == s_end: output_end(ctx)
   else: ctx.error(f'bad state: {state}')
 
 
@@ -385,8 +392,7 @@ def finish_quote(ctx: Ctx) -> None:
   ctx.quote_lines.clear()
 
 
-def output_section(ctx: Ctx, groups: Sequence[str], is_first: bool):
-  indents, hashes, spaces, text = groups
+def output_section(ctx: Ctx, hashes: str, spaces: str, title: str):
   check_whitespace(ctx, 1, spaces, 'following `#`')
   depth = len(hashes)
   if ctx.section_stack == []: # first/intro case only.
@@ -397,21 +403,20 @@ def output_section(ctx: Ctx, groups: Sequence[str], is_first: bool):
     prev_index = pop_sections_to_depth(ctx, depth - 1)
     parent_path = ctx.section_stack[-1].index_path if ctx.section_depth else ()
     index_path = parent_path + (prev_index+1,)
-  section = Section(index_path=index_path, title=text, children=[])
+  section = Section(index_path=index_path, title=title, children=[])
   ctx.section_stack.append(section)
   d = ctx.section_depth
   sid = section.sid
   quote_prefix = f'q{ctx.quote_depth}' if ctx.quote_depth else ''
   ctx.out(d - 1, f'<section class="S{d}" id="{quote_prefix}s{sid}">')
   h_num = min(6, depth)
-  ctx.out(depth, f'<h{h_num} id="h{sid}">{convert_text(ctx, text)}</h{h_num}>')
+  ctx.out(depth, f'<h{h_num} id="h{sid}">{convert_text(ctx, title)}</h{h_num}>')
   ctx.section_ids.append(sid)
   if depth <= 2:
     ctx.paging_ids.append(sid)
 
 
-def output_list(ctx: Ctx, groups: Sequence[str], is_first: bool, list_depth: int):
-  indents, spaces, text = groups
+def output_list(ctx: Ctx, list_depth: int, spaces: str, contents: str):
   check_whitespace(ctx, 1, spaces, ' following `*`')
   depth = list_depth + 1
   pop_lists_to_depth(ctx, depth)
@@ -419,35 +424,27 @@ def output_list(ctx: Ctx, groups: Sequence[str], is_first: bool, list_depth: int
     i = ctx.list_depth + 1
     ctx.out(ctx.section_depth + ctx.list_depth, f'<ul class="L{i}">')
     ctx.list_depth += 1
-  ctx.out(ctx.section_depth + ctx.list_depth, f'<li>{convert_text(ctx, text)}</li>')
+  ctx.out(ctx.section_depth + ctx.list_depth, f'<li>{convert_text(ctx, contents)}</li>')
 
 
-def output_code(ctx: Ctx, groups: Sequence[str], is_first: bool):
-  indents, text = groups
-  ctx.code_lines.append(html_esc(text))
+def output_code(ctx: Ctx, code: str):
+  ctx.code_lines.append(html_esc(code))
 
 
-def output_quote(ctx: Ctx, groups: Sequence[str], is_first: bool):
-  indents, quoted_line = groups
+def output_quote(ctx: Ctx, is_first: bool, quote: str):
   if is_first:
     ctx.quote_line_num = ctx.line_num
-  ctx.quote_lines.append(quoted_line) # not converted here; text is fully transformed by finish_quote.
+  ctx.quote_lines.append(quote) # not converted here; text is fully transformed by finish_quote.
 
 
-def output_text(ctx: Ctx, groups: Sequence[str], is_first: bool):
+def output_text(ctx: Ctx, is_first: bool, text: str):
   # TODO: check for strange characters that html will ignore.
-  indents, text = groups
   if is_first:
     ctx.out(ctx.section_depth + ctx.list_depth, '<p>')
   ctx.out(ctx.section_depth + ctx.list_depth + 1, convert_text(ctx, text))
 
 
-def output_blank(ctx: Ctx, groups: Sequence[str], is_first: bool):
-  spaces, = groups
-  if len(spaces): ctx.warn('blank line is not empty')
-
-
-def output_end(ctx: Ctx, groups: Sequence[str], is_first: bool):
+def output_end(ctx: Ctx):
   pop_sections_to_depth(ctx, 0)
   if ctx.emit_doc and ctx.license_lines:
     ctx.out(0, '<footer id="footer">\n', '<br />\n'.join(ctx.license_lines), '\n</footer>')
