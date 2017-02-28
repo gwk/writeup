@@ -135,10 +135,10 @@ class Block:
 
 
 class Section(Block):
-  def __init__(self, index_path: Tuple[int, ...], title: Line, children: List[Block]):
+  def __init__(self, index_path: Tuple[int, ...], title: Line, blocks: List[Block]):
     self.index_path = index_path
     self.title = title
-    self.children = children
+    self.blocks = blocks
 
   def __repr__(self): return f'Section({self.sid}, {self.title!r})'
 
@@ -146,7 +146,7 @@ class Section(Block):
   def sid(self): return '.'.join(str(i) for i in self.index_path)
 
 
-class UList(Block):
+class ListItem(Block):
   def __init__(self, items: List[Block]):
     self.items = items
 
@@ -417,7 +417,7 @@ def output_section(ctx: Ctx, hashes: str, spaces: str, title: str):
     prev_index = pop_sections_to_depth(ctx, depth - 1)
     parent_path = ctx.section_stack[-1].index_path if ctx.section_depth else ()
     index_path = parent_path + (prev_index+1,)
-  section = Section(index_path=index_path, title=title, children=[])
+  section = Section(index_path=index_path, title=title, blocks=[])
   ctx.section_stack.append(section)
   d = ctx.section_depth
   sid = section.sid
