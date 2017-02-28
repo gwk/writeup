@@ -3,20 +3,18 @@
   <ul class="L1">
     <li>z</li>
     <li>a</li>
-    <p>
-      a1
-    </p>
+    a1
     <ul class="L2">
       <li>b</li>
-      <p>
+        a1
+      <br />
         b1
-      </p>
     </ul>
-    <p>
-      a2
-    </p>
+    a2
   </ul>
   <p>
+    a2
+  <br />
     text.
   </p>
 </section>

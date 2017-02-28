@@ -228,6 +228,7 @@ class Ctx:
     self.code_lines = [] # type: List[str]
     self.quote_line_num = 0
     self.quote_lines = [] # type: List[str]
+    self.text_lines = [] # type: List[str]
     self.line = '' # updated per line.
     self.line_num = 0 # updated per line.
     parse(self)
@@ -331,20 +332,19 @@ def writeup_line(ctx: Ctx, prev_state: int, state: int, indents: str, m=Optional
       finish_quote(ctx)
   elif prev_state == s_text:
     if state != s_text or list_depth_changed:
-      ctx.out(ctx.section_depth + ctx.list_depth, '</p>')
-    else:
-      ctx.out(ctx.section_depth + ctx.list_depth, '<br />')
+      finish_text(ctx)
 
   if state not in (s_list, s_blank):
     pop_lists_to_depth(ctx, list_depth)
 
-  is_first = (prev_state != state) or list_depth_changed
 
   if state == s_section: output_section(ctx, hashes=m['section_hashes'], spaces=m['section_spaces'], title=m['section_title'])
   elif state == s_list: output_list(ctx, list_depth, spaces=m['list_spaces'], contents=m['list_contents'])
   elif state == s_code: output_code(ctx, code=m['code'])
-  elif state == s_quote: output_quote(ctx, is_first, quote=m['quote'])
-  elif state == s_text: output_text(ctx, is_first, text=m['text'])
+  elif state == s_quote:
+    is_first = (prev_state != state) or list_depth_changed
+    output_quote(ctx, is_first, quote=m['quote'])
+  elif state == s_text: output_text(ctx, text=m['text'])
   elif state == s_blank:
     if len(indents): ctx.warn('blank line is not empty')
   elif state == s_end: output_end(ctx)
@@ -392,6 +392,20 @@ def finish_quote(ctx: Ctx) -> None:
   ctx.quote_lines.clear()
 
 
+def finish_text(ctx: Ctx) -> None:
+  lines = [convert_text(ctx, line) for line in ctx.text_lines]
+  if len(lines) == 1 and ctx.list_depth > 0:
+    ctx.out(ctx.section_depth + ctx.list_depth, lines[0])
+    return
+  p = (ctx.list_depth == 0)
+  if p: ctx.out(ctx.section_depth + ctx.list_depth, '<p>')
+  for i, line in enumerate(lines):
+    if i: ctx.out(ctx.section_depth + ctx.list_depth, '<br />')
+    ctx.out(ctx.section_depth + ctx.list_depth + 1, line)
+  if p: ctx.out(ctx.section_depth + ctx.list_depth, '</p>')
+  ctx.text_lines.clear()
+
+
 def output_section(ctx: Ctx, hashes: str, spaces: str, title: str):
   check_whitespace(ctx, 1, spaces, 'following `#`')
   depth = len(hashes)
@@ -437,11 +451,8 @@ def output_quote(ctx: Ctx, is_first: bool, quote: str):
   ctx.quote_lines.append(quote) # not converted here; text is fully transformed by finish_quote.
 
 
-def output_text(ctx: Ctx, is_first: bool, text: str):
-  # TODO: check for strange characters that html will ignore.
-  if is_first:
-    ctx.out(ctx.section_depth + ctx.list_depth, '<p>')
-  ctx.out(ctx.section_depth + ctx.list_depth + 1, convert_text(ctx, text))
+def output_text(ctx: Ctx, text: str):
+  ctx.text_lines.append(text)
 
 
 def output_end(ctx: Ctx):
@@ -671,6 +682,7 @@ _add_embed(embed_img, '.gif', '.jpeg', '.jpg', '.png')
 # HTML escaping.
 
 def html_esc(text: str):
+  # TODO: check for strange characters that html will ignore.
   return html_escape(text, quote=False)
 
 def html_esc_attr(text: str):
