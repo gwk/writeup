@@ -182,9 +182,9 @@ line_re = re.compile(r'''(?x:
 (?P<indents> \s* )
 (?:
   (?P<section_hashes>\#+) (?P<section_spaces> \s* ) (?P<section_title> .* )
-| (?P<list_star> \* ) (?P<list_spaces> \s* ) (?P<list_contents> .+ )
-| (?P<quote_angle> > ) \ ? (?P<quote> .* )
-| (?P<code_bar> \| ) \ ? (?P<code> .* )
+| \* (?P<list_spaces> \s* ) (?P<list_contents> .+ )
+| >  \ ? (?P<quote> .* )
+| \| \ ? (?P<code> .* )
 | (?P<text> .+ )
 | (?P<blank>)
 )
