@@ -166,40 +166,6 @@ class Text(Block):
     self.lines = lines
 
 
-version_re = re.compile(r'writeup v(\d+)\n')
-# version pattern is applied to the first line of documents;
-# programs processing input strings may or may not check for a version as appropriate.
-
-license_re = re.compile(r'(©|Copyright|Dedicated to the public domain).*\n')
-# license pattern is is only applied to the first line (following the version line, if any).
-
-# line states.
-s_start, s_license, s_section, s_list, s_quote, s_code, s_text, s_blank, s_end = range(9)
-
-state_letters = '_©SLQCTBE' # for debug output only.
-
-line_re = re.compile(r'''(?x:
-(?P<indents> \s* )
-(?:
-  (?P<section_hashes>\#+) (?P<section_spaces> \s* ) (?P<section_title> .* )
-| \* (?P<list_spaces> \s* ) (?P<list_contents> .+ )
-| >  \ ? (?P<quote> .* )
-| \| \ ? (?P<code> .* )
-| (?P<text> .+ )
-| (?P<blank>)
-)
-)''')
-
-line_groups_to_states = {
-  'section_title' : s_section,
-  'list_contents' : s_list,
-  'quote' : s_quote,
-  'code': s_code,
-  'text': s_text,
-  'blank': s_blank,
-}
-
-
 class Ctx:
   '''
   Parser context.
@@ -251,6 +217,40 @@ class Ctx:
     errSL(f'writeup error: {self.src_path}:{self.line_num+1}:', *items)
     errSL(f'  {self.line!r}')
     exit(1)
+
+
+version_re = re.compile(r'writeup v(\d+)\n')
+# version pattern is applied to the first line of documents;
+# programs processing input strings may or may not check for a version as appropriate.
+
+license_re = re.compile(r'(©|Copyright|Dedicated to the public domain).*\n')
+# license pattern is is only applied to the first line (following the version line, if any).
+
+# line states.
+s_start, s_license, s_section, s_list, s_quote, s_code, s_text, s_blank, s_end = range(9)
+
+state_letters = '_©SLQCTBE' # for debug output only.
+
+line_re = re.compile(r'''(?x:
+(?P<indents> \s* )
+(?:
+  (?P<section_hashes>\#+) (?P<section_spaces> \s* ) (?P<section_title> .* )
+| \* (?P<list_spaces> \s* ) (?P<list_contents> .+ )
+| >  \ ? (?P<quote> .* )
+| \| \ ? (?P<code> .* )
+| (?P<text> .+ )
+| (?P<blank>)
+)
+)''')
+
+line_groups_to_states = {
+  'section_title' : s_section,
+  'list_contents' : s_list,
+  'quote' : s_quote,
+  'code': s_code,
+  'text': s_text,
+  'blank': s_blank,
+}
 
 
 def parse(ctx: Ctx):
