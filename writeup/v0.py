@@ -203,8 +203,8 @@ class Ctx:
   def section_depth(self) -> int:
     return len(self.section_stack)
 
-  def out(self, depth: int, *items: str) -> None:
-    self.lines.append(' ' * (depth * 2) + ''.join(items))
+  def out(self, *items: str, indent=0) -> None:
+    self.lines.append('  ' * (self.section_depth + self.list_depth + indent) + ''.join(items))
 
   def dep(self, dependency: str) -> None:
     self.dependencies.append(dependency)
@@ -302,12 +302,12 @@ def parse(ctx: Ctx):
 
   if ctx.emit_js:
     # Generate tables.
-    ctx.out(0, '<script type="text/javascript"> "use strict";')
+    ctx.out('<script type="text/javascript"> "use strict";')
     section_ids = ','.join(f"'s{sid}'" for sid in ctx.section_ids)
-    ctx.out(0, f'section_ids = [{section_ids}];')
+    ctx.out(f'section_ids = [{section_ids}];')
     paging_ids = ','.join(f"'s{pid}'" for pid in ctx.paging_ids)
-    ctx.out(0, f"paging_ids = ['body', {paging_ids}];")
-    ctx.out(0, '</script>')
+    ctx.out(f"paging_ids = ['body', {paging_ids}];")
+    ctx.out('</script>')
 
 
 def writeup_line(ctx: Ctx, prev_state: int, state: int, indents: str, m=Optional[Re.Match]) -> None:
@@ -354,14 +354,14 @@ def writeup_line(ctx: Ctx, prev_state: int, state: int, indents: str, m=Optional
 def pop_lists_to_depth(ctx: Ctx, depth: int):
   while ctx.list_depth > depth:
     ctx.list_depth -= 1
-    ctx.out(ctx.section_depth + ctx.list_depth, '</ul>')
+    ctx.out('</ul>')
 
 
 def pop_sections_to_depth(ctx: Ctx, depth: int):
   prev_index = 0
   while ctx.section_depth > depth:
     prev = ctx.section_stack.pop()
-    ctx.out(ctx.section_depth + ctx.list_depth, '</section>')
+    ctx.out('</section>')
     prev_index = prev.index_path[depth]
   return prev_index
 
@@ -371,12 +371,12 @@ def finish_code(ctx: Ctx) -> None:
   # but a final newline between content and the `pre` close tag looks bad.
   # therefore we must take care to format the contents without a final newline.
   contents = '\n'.join(ctx.code_lines)
-  ctx.out(ctx.section_depth + ctx.list_depth, f'<pre>\n{contents}</pre>')
+  ctx.out(f'<pre>\n{contents}</pre>')
   ctx.code_lines.clear()
 
 
 def finish_quote(ctx: Ctx) -> None:
-  ctx.out(ctx.section_depth + ctx.list_depth, '<blockquote>')
+  ctx.out('<blockquote>')
   quote_ctx = Ctx(
     src_path=ctx.src_path,
     src_lines=ctx.quote_lines,
@@ -387,22 +387,22 @@ def finish_quote(ctx: Ctx) -> None:
     emit_doc=False,
     quote_depth=ctx.quote_depth + 1)
   for ql in quote_ctx.lines:
-    ctx.out(ctx.section_depth + ctx.list_depth + 1, ql)
-  ctx.out(ctx.section_depth + ctx.list_depth, '</blockquote>')
+    ctx.out(ql, indent=1)
+  ctx.out('</blockquote>')
   ctx.quote_lines.clear()
 
 
 def finish_text(ctx: Ctx) -> None:
   lines = [convert_text(ctx, line) for line in ctx.text_lines]
   if len(lines) == 1 and ctx.list_depth > 0:
-    ctx.out(ctx.section_depth + ctx.list_depth, lines[0])
+    ctx.out(lines[0])
     return
   p = (ctx.list_depth == 0)
-  if p: ctx.out(ctx.section_depth + ctx.list_depth, '<p>')
+  if p: ctx.out('<p>')
   for i, line in enumerate(lines):
-    if i: ctx.out(ctx.section_depth + ctx.list_depth, '<br />')
-    ctx.out(ctx.section_depth + ctx.list_depth + 1, line)
-  if p: ctx.out(ctx.section_depth + ctx.list_depth, '</p>')
+    if i: ctx.out('<br />')
+    ctx.out(line, indent=1)
+  if p: ctx.out('</p>')
   ctx.text_lines.clear()
 
 
@@ -422,9 +422,9 @@ def output_section(ctx: Ctx, hashes: str, spaces: str, title: str):
   d = ctx.section_depth
   sid = section.sid
   quote_prefix = f'q{ctx.quote_depth}' if ctx.quote_depth else ''
-  ctx.out(d - 1, f'<section class="S{d}" id="{quote_prefix}s{sid}">')
+  ctx.out(f'<section class="S{d}" id="{quote_prefix}s{sid}">', indent=-1)
   h_num = min(6, depth)
-  ctx.out(depth, f'<h{h_num} id="h{sid}">{convert_text(ctx, title)}</h{h_num}>')
+  ctx.out(f'<h{h_num} id="h{sid}">{convert_text(ctx, title)}</h{h_num}>')
   ctx.section_ids.append(sid)
   if depth <= 2:
     ctx.paging_ids.append(sid)
@@ -436,9 +436,9 @@ def output_list(ctx: Ctx, list_depth: int, spaces: str, contents: str):
   pop_lists_to_depth(ctx, depth)
   while ctx.list_depth < depth:
     i = ctx.list_depth + 1
-    ctx.out(ctx.section_depth + ctx.list_depth, f'<ul class="L{i}">')
+    ctx.out(f'<ul class="L{i}">')
     ctx.list_depth += 1
-  ctx.out(ctx.section_depth + ctx.list_depth, f'<li>{convert_text(ctx, contents)}</li>')
+  ctx.out(f'<li>{convert_text(ctx, contents)}</li>')
 
 
 def output_code(ctx: Ctx, code: str):
@@ -458,7 +458,7 @@ def output_text(ctx: Ctx, text: str):
 def output_end(ctx: Ctx):
   pop_sections_to_depth(ctx, 0)
   if ctx.emit_doc and ctx.license_lines:
-    ctx.out(0, '<footer id="footer">\n', '<br />\n'.join(ctx.license_lines), '\n</footer>')
+    ctx.out('<footer id="footer">\n', '<br />\n'.join(ctx.license_lines), '\n</footer>')
 
 
 def check_whitespace(ctx, len_exp, string, msg_suffix=''):
