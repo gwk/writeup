@@ -338,16 +338,21 @@ def writeup_line(ctx: Ctx, prev_state: int, state: int, indents: str, m=Optional
     pop_lists_to_depth(ctx, list_depth)
 
 
-  if state == s_section: output_section(ctx, hashes=m['section_hashes'], spaces=m['section_spaces'], title=m['section_title'])
-  elif state == s_list: output_list(ctx, list_depth, spaces=m['list_spaces'], contents=m['list_contents'])
-  elif state == s_code: output_code(ctx, code=m['code'])
+  if state == s_section:
+    output_section(ctx, hashes=m['section_hashes'], spaces=m['section_spaces'], title=m['section_title'])
+  elif state == s_list:
+    output_list(ctx, list_depth, spaces=m['list_spaces'], contents=m['list_contents'])
+  elif state == s_code:
+    output_code(ctx, code=m['code'])
   elif state == s_quote:
     is_first = (prev_state != state) or list_depth_changed
     output_quote(ctx, is_first, quote=m['quote'])
-  elif state == s_text: output_text(ctx, text=m['text'])
+  elif state == s_text:
+    output_text(ctx, text=m['text'])
   elif state == s_blank:
     if len(indents): ctx.warn('blank line is not empty')
-  elif state == s_end: output_end(ctx)
+  elif state == s_end:
+    output_end(ctx)
   else: ctx.error(f'bad state: {state}')
 
 
