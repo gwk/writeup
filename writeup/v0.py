@@ -79,6 +79,7 @@ def writeup(src_path: str, src_lines: Iterable[str], title: str, description: st
   ctx = Ctx(
     src_path=src_path,
     src_lines=src_lines,
+    embed=True,
     emit_js=bool(js),
     emit_doc=emit_doc)
 
@@ -113,6 +114,7 @@ def writeup_dependencies(src_path: str, src_lines: Iterable[str], dir_names: Opt
   ctx = Ctx(
     src_path=src_path,
     src_lines=src_lines,
+    embed=False,
     emit_js=False,
     emit_doc=False)
   return sorted(ctx.dependencies)
@@ -172,10 +174,11 @@ class Ctx:
   Converts input writeup source text to output html lines and dependencies.
   '''
 
-  def __init__(self, src_path: str, src_lines: Iterable[str], emit_doc: bool, emit_js: bool,
+  def __init__(self, src_path: str, src_lines: Iterable[str], embed: bool, emit_doc: bool, emit_js: bool,
    is_versioned=True, warn_missing_final_newline=True, line_offset=0, quote_depth=0) -> None:
     self.src_path = src_path
     self.src_lines = src_lines
+    self.embed = embed
     self.emit_doc = emit_doc
     self.emit_js = emit_js
     self.is_versioned = is_versioned
@@ -388,6 +391,7 @@ def finish_quote(ctx: Ctx) -> None:
     line_offset=ctx.quote_line_num,
     is_versioned=False,
     warn_missing_final_newline=False,
+    embed=ctx.embed,
     emit_js=False,
     emit_doc=False,
     quote_depth=ctx.quote_depth + 1)
@@ -548,16 +552,17 @@ span_re = re.compile('|'.join(p for p, _ in span_pairs))
 
 # generic angle bracket spans.
 
-def span_bold(ctx: Ctx, tag: str, text: str):
+def span_bold(ctx: Ctx, tag: str, text: str) -> str:
   'convert a `bold` span into html.'
   return f'<b>{html_esc(text)}</b>'
 
-def span_embed(ctx: Ctx, tag: str, text: str):
+def span_embed(ctx: Ctx, tag: str, text: str) -> str:
   'convert an `embed` span into html.'
   target_path = path_join(ctx.search_dir, text)
   if target_path.startswith('./'):
     target_path = target_path[2:]
   ctx.dep(target_path)
+  if not ctx.embed: return ''
   try: f = open(target_path)
   except FileNotFoundError:
     ctx.error(f'embedded file not found: {target_path!r}')
@@ -568,7 +573,7 @@ def span_embed(ctx: Ctx, tag: str, text: str):
   return fn(ctx, f)
 
 
-def span_link(ctx: Ctx, tag: str, text: str):
+def span_link(ctx: Ctx, tag: str, text: str) -> str:
   'convert a `link` span into html.'
   words = text.split()
   if not words:
@@ -585,7 +590,7 @@ def span_link(ctx: Ctx, tag: str, text: str):
   return f'<a href={html_esc_attr(link)}>{html_esc(visible)}</a>'
 
 
-def span_span(ctx: Ctx, tag: str, text: str):
+def span_span(ctx: Ctx, tag: str, text: str) -> str:
   'convert a `span` span into html.'
   attrs = []
   body = []
