@@ -625,6 +625,11 @@ span_dispatch = {
 }
 
 
+def embed_css(ctx, f):
+  css = f.read()
+  return f'<style type="text/css">{css}</style>'
+
+
 def embed_csv(ctx, f):
   from csv import reader
   csv_reader = reader(f)
@@ -677,6 +682,7 @@ def embed_wu(ctx, f):
 
 
 embed_dispatch = {
+  '.css'  : embed_css,
   '.csv'  : embed_csv,
   '.txt'  : embed_txt,
   '.wu'   : embed_wu,
