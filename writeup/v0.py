@@ -223,7 +223,7 @@ version_re = re.compile(r'writeup v(\d+)\n')
 # version pattern is applied to the first line of documents;
 # programs processing input strings may or may not check for a version as appropriate.
 
-license_re = re.compile(r'(©|Copyright|Dedicated to the public domain).*\n')
+license_re = re.compile(r'(©|Copyright|Dedicated to the public domain).*')
 # license pattern is is only applied to the first line (following the version line, if any).
 
 # line states.
