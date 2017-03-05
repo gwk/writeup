@@ -18,11 +18,15 @@
   </p>
   <ul class="L1">
     <li>A</li>
-    <li>B</li>
-    <ul class="L2">
-      <li>B1</li>
-      <li>B2</li>
-    </ul>
+    <li>
+      <p>
+        B
+      </p>
+      <ul class="L2">
+        <li>B1</li>
+        <li>B2</li>
+      </ul>
+    </li>
     <li>C</li>
   </ul>
   <p>
@@ -48,10 +52,14 @@
         List:
       </p>
       <ul class="L1">
-        <li>A</li>
-        <ul class="L2">
-          <li>B</li>
-        </ul>
+        <li>
+          <p>
+            A
+          </p>
+          <ul class="L2">
+            <li>B</li>
+          </ul>
+        </li>
       </ul>
       <blockquote>
         <p>

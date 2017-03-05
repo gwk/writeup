@@ -1,20 +1,30 @@
 <section class="S1" id="s0">
   <h1 id="h0">Intro</h1>
+  <p>
+    t1.
+  </p>
   <ul class="L1">
-    <li>z</li>
-    <li>a</li>
-    a1
-    <ul class="L2">
-      <li>b</li>
-        a1
+    <li>
+      <p>
+        a
       <br />
-        b1
-    </ul>
-    a2
+        a1
+      </p>
+      <ul class="L2">
+        <li>
+            b
+          <br />
+            b1
+        </li>
+      </ul>
+      <p>
+        a2
+      </p>
+    </li>
   </ul>
   <p>
-    a2
+    t2.
   <br />
-    text.
+    t3.
   </p>
 </section>

@@ -26,6 +26,7 @@ def main() -> None:
   arg_parser.add_argument('-no-css', action='store_true', help='Omit default CSS.')
   arg_parser.add_argument('-no-js', action='store_true', help='Omit default Javascript.')
   arg_parser.add_argument('-frag', action='store_true', help='Omit the top-level HTML document structure.')
+  arg_parser.add_argument('-dbg', action='store_true', help='print debug info.')
 
   args = arg_parser.parse_args()
 
@@ -44,7 +45,9 @@ def main() -> None:
   if args.print_dependencies:
     dependencies = writeup_dependencies(
       src_path=src_path,
-      src_lines=f_in)
+      src_lines=f_in,
+      dbg=args.dbg,
+    )
     for dep in dependencies:
       print(dep, file=f_out)
     exit(0)
@@ -67,21 +70,23 @@ def main() -> None:
       css=minify_css('\n'.join(css)),
       js=(None if args.frag or args.no_js else minify_js(default_js)),
       emit_doc=(not args.frag),
+      dbg=args.dbg,
     ))
     for line in html_lines:
       print(line, file=f_out)
 
 
 def writeup(src_path: str, src_lines: Iterable[str], title: str, description: str, author: str,
-  css: Optional[str], js: Optional[str], emit_doc: bool) -> Iterable[str]:
+  css: Optional[str], js: Optional[str], emit_doc: bool, dbg: bool) -> Iterable[str]:
   'generate a complete html document from a writeup file (or stream of lines).'
 
   ctx = Ctx(
     src_path=src_path,
     src_lines=src_lines,
     embed=True,
+    emit_doc=emit_doc,
     emit_js=bool(js),
-    emit_doc=emit_doc)
+    dbg=dbg)
 
   if emit_doc:
     yield from [
@@ -100,13 +105,13 @@ def writeup(src_path: str, src_lines: Iterable[str], title: str, description: st
     yield '</head>'
     yield '<body id="body">'
 
-  yield from ctx.lines
+  yield from ctx.emit_html()
 
   if emit_doc:
     yield '</body>\n</html>'
 
 
-def writeup_dependencies(src_path: str, src_lines: Iterable[str], dir_names: Optional[List[Any]]=None) -> List[str]:
+def writeup_dependencies(src_path: str, src_lines: Iterable[str], dir_names: Optional[List[Any]]=None, dbg=False) -> List[str]:
   '''
   Return a list of dependencies from the writeup in `src_lines`.
   `dir_names` is an ignored argument passed by the external `muck` tool.
@@ -116,8 +121,12 @@ def writeup_dependencies(src_path: str, src_lines: Iterable[str], dir_names: Opt
     src_lines=src_lines,
     embed=False,
     emit_js=False,
-    emit_doc=False)
+    emit_doc=False,
+    dbg=dbg)
   return sorted(ctx.dependencies)
+
+
+class Ctx: ...
 
 
 class Span:
@@ -134,38 +143,129 @@ class Line:
 
 class Block:
   'A tree node of block-level HTML content.'
+  def html(self, ctx: Ctx, depth: int): raise NotImplementedError
 
 
 class Section(Block):
-  def __init__(self, index_path: Tuple[int, ...], title: Line, blocks: List[Block]):
+  def __init__(self, quote_depth: int, section_depth: int, index_path: Tuple[int, ...], title: Line):
+    self.quote_depth = quote_depth
+    self.section_depth = section_depth
     self.index_path = index_path
     self.title = title
-    self.blocks = blocks
+    self.blocks: List[Block] = []
 
-  def __repr__(self): return f'Section({self.sid}, {self.title!r})'
+  def __repr__(self): return f'Section({self.sid}, {self.title!r}, {len(self.blocks)} blocks)'
 
   @property
   def sid(self): return '.'.join(str(i) for i in self.index_path)
 
+  def html(self, ctx: Ctx, depth: int):
+    sid = self.sid
+    quote_prefix = f'q{self.quote_depth}' if self.quote_depth else ''
+    ctx.out(depth, f'<section class="S{self.section_depth}" id="{quote_prefix}s{sid}">')
+    h_num = min(6, self.section_depth)
+    ctx.out(depth + 1, f'<h{h_num} id="h{sid}">{convert_text(ctx, self.title)}</h{h_num}>')
+    ctx.section_ids.append(sid)
+    if depth <= 2: ctx.paging_ids.append(sid)
+    for block in self.blocks:
+      block.html(ctx, depth + 1)
+    ctx.out(depth, '</section>')
+
+
+class UList(Block):
+  def __init__(self, list_level: int):
+    super().__init__()
+    self.list_level = list_level # 1-indexed (top-level list is 1; no lists is 0).
+    self.items: List[ListItem] = []
+
+  def __repr__(self): return f'UList({self.list_level}, {len(self.items)} items)'
+
+  def html(self, ctx: Ctx, depth: int):
+    ctx.out(depth, f'<ul class="L{self.list_level}">')
+    for item in self.items:
+      item.html(ctx, depth + 1)
+    ctx.out(depth, f'</ul>')
+
 
 class ListItem(Block):
-  def __init__(self, items: List[Block]):
-    self.items = items
+  def __init__(self, list_level: int):
+    self.list_level = list_level # 1-indexed (top-level list is 1; no lists is 0).
+    self.blocks: List[Block] = []
+
+  def __repr__(self): return f'ListItem({self.list_level}, {len(self.blocks)} blocks)'
+
+  def html(self, ctx: Ctx, depth: int):
+    if len(self.blocks) == 1 and isinstance(self.blocks[0], Text):
+      if len(self.blocks[0].text_lines) == 1:
+        ctx.out(depth, f'<li>{convert_text(ctx, self.blocks[0].text_lines[0])}</li>')
+      else:
+        #ctx.dbgSL("TEXTBLOCK")
+        ctx.out(depth, f'<li>')
+        ctx.out_text_lines(depth + 1, text_lines=self.blocks[0].text_lines)
+        ctx.out(depth, f'</li>')
+    else:
+      #ctx.dbgSL("BLOCKS")
+      ctx.out(depth, f'<li>')
+      for block in self.blocks:
+        block.html(ctx, depth + 1)
+      ctx.out(depth, f'</li>')
 
 
-class Quote(Block):
-  def __init__(self, blocks: List[Block]):
-    self.blocks = blocks
+BranchBlock = Union[Section, UList, ListItem]
 
 
-class Code(Block):
-  def __init__(self, lines: List[str]):
-    self.lines = lines
+class LeafBlock(Block):
+  def __init__(self):
+    self.text_lines: List[str] = []
+
+  def __repr__(self):
+    head = f'{self.text_lines[0][0:64]!r}… {len(self.text_lines)} lines' if self.text_lines else ''
+    return f'{type(self).__name__}({head})'
 
 
-class Text(Block):
-  def __init__(self, lines: List[Line]):
-    self.lines = lines
+class Quote(LeafBlock):
+  def __init__(self):
+    super().__init__()
+    self.blocks: List[Block] = [] # TODO: not yet used.
+    self.quote_line_offset = -1
+
+
+  def html(self, ctx: Ctx, depth: int):
+    assert self.quote_line_offset >= 0
+    quote_ctx = Ctx(
+      src_path=ctx.src_path,
+      src_lines=self.text_lines,
+      line_offset=self.quote_line_offset,
+      is_versioned=False,
+      warn_missing_final_newline=False,
+      embed=ctx.embed,
+      emit_js=False,
+      emit_doc=False,
+      quote_depth=ctx.quote_depth + 1,
+      dbg=ctx.dbg)
+    ctx.out(depth, '<blockquote>')
+    for line in quote_ctx.emit_html():
+      ctx.out(depth + 1, line)
+    ctx.out(depth, '</blockquote>')
+
+
+class Code(LeafBlock):
+
+  def html(self, ctx: Ctx, depth: int) -> str:
+    # a newline after the `pre` open tag looks ok,
+    # but a final newline between content and the `pre` close tag looks bad.
+    # therefore we must take care to format the contents without a final newline.
+    contents = '\n'.join(html_esc(line) for line in self.text_lines)
+    ctx.out(depth, f'<pre>\n{contents}</pre>')
+
+
+class Text(LeafBlock):
+
+  def html(self, ctx: Ctx, depth: int):
+    ctx.out(depth, '<p>')
+    ctx.out_text_lines(depth, self.text_lines)
+    ctx.out(depth, '</p>')
+
 
 
 class Ctx:
@@ -175,7 +275,7 @@ class Ctx:
   '''
 
   def __init__(self, src_path: str, src_lines: Iterable[str], embed: bool, emit_doc: bool, emit_js: bool,
-   is_versioned=True, warn_missing_final_newline=True, line_offset=0, quote_depth=0) -> None:
+   is_versioned=True, warn_missing_final_newline=True, line_offset=0, quote_depth=0, dbg=False) -> None:
     self.src_path = src_path
     self.src_lines = src_lines
     self.embed = embed
@@ -185,29 +285,99 @@ class Ctx:
     self.warn_missing_final_newline = warn_missing_final_newline
     self.line_offset = line_offset
     self.quote_depth = quote_depth
+    self.dbg = dbg
 
     self.search_dir = path_dir(src_path) or '.'
-    self.lines = []
-    self.dependencies = []
-    self.section_ids = [] # type: List[str] # accumulated list of all section ids.
-    self.paging_ids = [] # type: List[str] # accumulated list of all paging (level 1 & 2) section ids.
-    self.section_stack = [] # type: List[int] # stack of currently open sections.
-    self.list_depth = 0 # currently open list depth.
-    self.license_lines = [] # type: List[str]
-    self.code_lines = [] # type: List[str]
-    self.quote_line_num = 0
-    self.quote_lines = [] # type: List[str]
-    self.text_lines = [] # type: List[str]
+    self.license_lines: List[str] = []
+    self.stack: List[Block] = [] # stack of currently open content blocks.
+    self.blocks: List[Block] = [] # top level blocks.
+    self.html_lines: List[str] = []
+    self.dependencies: List[str] = []
+    self.section_ids: List[str] = [] # accumulated list of all section ids.
+    self.paging_ids: List[str] = [] # accumulated list of all paging (level 1 & 2) section ids.
+
     self.line = '' # updated per line.
     self.line_num = 0 # updated per line.
+
     parse(self)
 
-  @property
-  def section_depth(self) -> int:
-    return len(self.section_stack)
 
-  def out(self, *items: str, indent=0) -> None:
-    self.lines.append('  ' * (self.section_depth + self.list_depth + indent) + ''.join(items))
+  @property
+  def depth(self) -> int:
+    return len(self.stack)
+
+  @property
+  def list_level(self) -> int:
+    for block in reversed(self.stack):
+      if isinstance(block, (UList, ListItem)):
+        return block.list_level
+    return 0
+
+  @property
+  def top(self) -> Block:
+    return self.stack[-1]
+
+  def push(self, block: Block):
+    self.dbgSL('PUSH', self.line_num, self.stack, block)
+    if self.stack:
+      self.top.blocks.append(block)
+    else:
+      self.blocks.append(block)
+    self.stack.append(block)
+
+  def pop(self) -> Block:
+    self.dbgSL('POP', self.line_num, self.stack)
+    return self.stack.pop()
+
+  def pop_to_section_depth(self, section_depth: int) -> int:
+    prev_index = 0
+    while self.depth > section_depth:
+      prev = self.pop()
+      prev_index = prev.index_path[section_depth]
+    return prev_index
+
+  def pop_to_list(self, list_level: int):
+    self.dbgSL('POP TO LIST', list_level)
+    while self.stack:
+      top = self.top
+      if isinstance(top, Section): return
+      if isinstance(top, UList) and top.list_level <= list_level: return
+      if isinstance(top, ListItem) and top.list_level < list_level: return
+      self.pop()
+
+  def append_to_leaf_block(self, list_level, block_type, line):
+    self.dbgSL("APPEND", list_level, block_type.__name__, line)
+    while self.stack:
+      top = self.top
+      if isinstance(top, Section): break
+      if isinstance(top, ListItem) and top.list_level <= list_level: break
+      if isinstance(top, block_type) and self.list_level == list_level: break
+      self.pop()
+    if self.stack and isinstance(self.top, block_type):
+      leaf = self.top
+    else:
+      leaf = block_type()
+      self.push(leaf)
+    leaf.text_lines.append(line)
+    self.dbgSL('-', self.stack)
+
+  def close_leaf_block(self):
+    if self.stack and isinstance(self.top, LeafBlock):
+      self.pop()
+      assert not self.stack or isinstance(self.top, (Section, ListItem))
+
+  def out(self, depth: int, *items: str) -> None:
+    self.html_lines.append('  ' * depth + ''.join(items))
+
+  def out_text_lines(self, depth: int, text_lines: List[str]):
+    for i, line in enumerate(text_lines):
+      if i: self.out(depth, '<br />')
+      self.out(depth + 1, convert_text(self, line))
+
+  def emit_html(self):
+    for block in self.blocks:
+      block.html(ctx=self, depth=0)
+    return self.html_lines
 
   def dep(self, dependency: str) -> None:
     self.dependencies.append(dependency)
@@ -221,6 +391,9 @@ class Ctx:
     errSL(f'  {self.line!r}')
     exit(1)
 
+  def dbgSL(self, *items):
+    if self.dbg: errSL(*items)
+
 
 version_re = re.compile(r'writeup v(\d+)\n')
 # version pattern is applied to the first line of documents;
@@ -230,30 +403,29 @@ license_re = re.compile(r'(©|Copyright|Dedicated to the public domain).*')
 # license pattern is is only applied to the first line (following the version line, if any).
 
 # line states.
-s_start, s_license, s_section, s_list, s_quote, s_code, s_text, s_blank, s_end = range(9)
+s_start, s_license, s_section, s_quote, s_code, s_text, s_blank = range(7)
 
-state_letters = '_©SLQCTBE' # for debug output only.
+state_letters = '^©SQCTB' # for debug output only.
 
 line_re = re.compile(r'''(?x:
+(?P<section_indents> \s* ) (?P<section_hashes>\#+) (?P<section_spaces> \s* ) (?P<section_title> .* )
+|
 (?P<indents> \s* )
+( (?P<list_star> \* ) (?P<list_spaces> \s* ) )?
 (?:
-  (?P<section_hashes>\#+) (?P<section_spaces> \s* ) (?P<section_title> .* )
-| \* (?P<list_spaces> \s* ) (?P<list_contents> .+ )
-| >  \ ? (?P<quote> .* )
-| \| \ ? (?P<code> .* )
-| (?P<text> .+ )
-| (?P<blank>)
+  >  \s? (?P<quote> .* )
+| \| \s? (?P<code> .* )
+| (?P<text> [^\s] .* )
+| # blank.
 )
 )''')
 
 line_groups_to_states = {
   'section_title' : s_section,
-  'list_contents' : s_list,
   'quote' : s_quote,
   'code': s_code,
   'text': s_text,
-  'blank': s_blank,
-}
+} # defaults to s_blank.
 
 
 def parse(ctx: Ctx):
@@ -294,180 +466,89 @@ def parse(ctx: Ctx):
 
     # normal line.
     m = line_re.fullmatch(line)
-    state = line_groups_to_states[m.lastgroup]
-    writeup_line(ctx=ctx, prev_state=prev_state, state=state, indents=m['indents'], m=m)
+    #errSL('L', repr(line))
+    #errSL('M', m)
+    state = line_groups_to_states.get(m.lastgroup, s_blank)
+    writeup_line(ctx=ctx, state=state, m=m)
     prev_state = state
 
   # Finish.
-  ctx.line = ''
-  ctx.line_num += 1
-  writeup_line(ctx=ctx, prev_state=prev_state, state=s_end, indents='', m=None)
-
+  ctx.stack.clear()
+  if ctx.emit_doc and ctx.license_lines:
+    ctx.out(0, '<footer id="footer">\n', '<br />\n'.join(ctx.license_lines), '\n</footer>')
   if ctx.emit_js:
     # Generate tables.
-    ctx.out('<script type="text/javascript"> "use strict";')
+    ctx.out(0, '<script type="text/javascript"> "use strict";')
     section_ids = ','.join(f"'s{sid}'" for sid in ctx.section_ids)
-    ctx.out(f'section_ids = [{section_ids}];')
+    ctx.out(0, f'section_ids = [{section_ids}];')
     paging_ids = ','.join(f"'s{pid}'" for pid in ctx.paging_ids)
-    ctx.out(f"paging_ids = ['body', {paging_ids}];")
-    ctx.out('</script>')
+    ctx.out(0, f"paging_ids = ['body', {paging_ids}];")
+    ctx.out(0, '</script>')
 
 
-def writeup_line(ctx: Ctx, prev_state: int, state: int, indents: str, m=Optional[Re.Match]) -> None:
+def writeup_line(ctx: Ctx, state: int, m: Re.Match) -> None:
   'Inner function to process a line.'
 
-  #errSL(f'{ctx.line_num:03} {state_letters[prev_state]}{state_letters[state]}: {ctx.line}')
-
-  check_whitespace(ctx, -1, indents, ' in indent')
-  l = len(indents)
-  if l % 2: ctx.warn(f'odd indentation length: {l}.')
-  list_depth = l // 2
-  if ctx.list_depth < list_depth:
-    ctx.error(f'indent implies missing parent list of depth {ctx.list_depth+1}')
-  list_depth_changed = (ctx.list_depth != list_depth and state != s_blank)
-
-  # Some transitions between states/depths require handling.
-  if prev_state == s_code:
-    if state != s_code or list_depth_changed:
-      finish_code(ctx)
-  elif prev_state == s_quote:
-    if state != s_quote or list_depth_changed:
-      finish_quote(ctx)
-  elif prev_state == s_text:
-    if state != s_text or list_depth_changed:
-      finish_text(ctx)
-
-  if state not in (s_list, s_blank):
-    pop_lists_to_depth(ctx, list_depth)
-
+  ctx.dbgSL(f'DBG {ctx.line_num:03} {state_letters[state]}: {ctx.line}')
 
   if state == s_section:
-    output_section(ctx, hashes=m['section_hashes'], spaces=m['section_spaces'], title=m['section_title'])
-  elif state == s_list:
-    output_list(ctx, list_depth, spaces=m['list_spaces'], contents=m['list_contents'])
-  elif state == s_code:
-    output_code(ctx, code=m['code'])
-  elif state == s_quote:
-    is_first = (prev_state != state) or list_depth_changed
-    output_quote(ctx, is_first, quote=m['quote'])
-  elif state == s_text:
-    output_text(ctx, text=m['text'])
-  elif state == s_blank:
-    if len(indents): ctx.warn('blank line is not empty')
-  elif state == s_end:
-    output_end(ctx)
-  else: ctx.error(f'bad state: {state}')
-
-
-def pop_lists_to_depth(ctx: Ctx, depth: int):
-  while ctx.list_depth > depth:
-    ctx.list_depth -= 1
-    ctx.out('</ul>')
-
-
-def pop_sections_to_depth(ctx: Ctx, depth: int):
-  prev_index = 0
-  while ctx.section_depth > depth:
-    prev = ctx.section_stack.pop()
-    ctx.out('</section>')
-    prev_index = prev.index_path[depth]
-  return prev_index
-
-
-def finish_code(ctx: Ctx) -> None:
-  # a newline after the `pre` open tag looks ok,
-  # but a final newline between content and the `pre` close tag looks bad.
-  # therefore we must take care to format the contents without a final newline.
-  contents = '\n'.join(ctx.code_lines)
-  ctx.out(f'<pre>\n{contents}</pre>')
-  ctx.code_lines.clear()
-
-
-def finish_quote(ctx: Ctx) -> None:
-  ctx.out('<blockquote>')
-  quote_ctx = Ctx(
-    src_path=ctx.src_path,
-    src_lines=ctx.quote_lines,
-    line_offset=ctx.quote_line_num,
-    is_versioned=False,
-    warn_missing_final_newline=False,
-    embed=ctx.embed,
-    emit_js=False,
-    emit_doc=False,
-    quote_depth=ctx.quote_depth + 1)
-  for ql in quote_ctx.lines:
-    ctx.out(ql, indent=1)
-  ctx.out('</blockquote>')
-  ctx.quote_lines.clear()
-
-
-def finish_text(ctx: Ctx) -> None:
-  lines = [convert_text(ctx, line) for line in ctx.text_lines]
-  if len(lines) == 1 and ctx.list_depth > 0:
-    ctx.out(lines[0])
+    ctx.pop_to_list(0)
+    if m['section_indents']: ctx.error(f'section header cannot be indented.')
+    check_whitespace(ctx, 1, m['section_spaces'], 'following `#`')
+    section_depth = len(m['section_hashes'])
+    if not ctx.stack: # first/intro case only.
+      index_path = (0,) # intro section is indexed 0; everything else is 1-indexed.
+    elif section_depth > ctx.depth + 1:
+        ctx.error(f'missing parent section of depth {ctx.depth + 1}')
+    else: # normal case.
+      prev_index = ctx.pop_to_section_depth(section_depth - 1)
+      parent_path = ctx.top.index_path if ctx.stack else ()
+      index_path = parent_path + (prev_index+1,)
+    section = Section(quote_depth=ctx.quote_depth, section_depth=section_depth, index_path=index_path, title=m['section_title'])
+    ctx.push(section)
     return
-  p = (ctx.list_depth == 0)
-  if p: ctx.out('<p>')
-  for i, line in enumerate(lines):
-    if i: ctx.out('<br />')
-    ctx.out(line, indent=1)
-  if p: ctx.out('</p>')
-  ctx.text_lines.clear()
 
+  indents = m['indents']
+  check_whitespace(ctx, -1, indents, ' in indent')
+  l = len(indents)
+  if l % 2: ctx.error(f'odd indentation length: {l}.')
+  list_level = l // 2
+  if ctx.list_level < list_level:
+    errSL(ctx.stack)
+    ctx.error(f'indent implies missing parent list at indent depth {ctx.list_level+1}.')
 
-def output_section(ctx: Ctx, hashes: str, spaces: str, title: str):
-  check_whitespace(ctx, 1, spaces, 'following `#`')
-  depth = len(hashes)
-  if ctx.section_stack == []: # first/intro case only.
-    index_path = (0,) # intro section is indexed 0; everything else is 1-indexed.
-  elif depth > ctx.section_depth + 1:
-      ctx.error(f'missing parent section of depth {ctx.section_depth+1}')
-  else: # normal case.
-    prev_index = pop_sections_to_depth(ctx, depth - 1)
-    parent_path = ctx.section_stack[-1].index_path if ctx.section_depth else ()
-    index_path = parent_path + (prev_index+1,)
-  section = Section(index_path=index_path, title=title, blocks=[])
-  ctx.section_stack.append(section)
-  d = ctx.section_depth
-  sid = section.sid
-  quote_prefix = f'q{ctx.quote_depth}' if ctx.quote_depth else ''
-  ctx.out(f'<section class="S{d}" id="{quote_prefix}s{sid}">', indent=-1)
-  h_num = min(6, depth)
-  ctx.out(f'<h{h_num} id="h{sid}">{convert_text(ctx, title)}</h{h_num}>')
-  ctx.section_ids.append(sid)
-  if depth <= 2:
-    ctx.paging_ids.append(sid)
+  if m['list_star']:
+    check_whitespace(ctx, 1, m['list_spaces'], ' following `*`')
+    goal_level = list_level + 1
+    ctx.pop_to_list(goal_level)
+    if ctx.list_level < goal_level:
+      assert ctx.list_level + 1 == goal_level
+      ulist = UList(list_level=goal_level)
+      ctx.push(ulist)
+    else:
+      ulist = ctx.top
+      assert isinstance(ulist, UList)
+    item = ListItem(list_level=goal_level)
+    ulist.items.append(item)
+    ctx.stack.append(item)
+    list_level = goal_level
 
+  if state == s_code:
+    ctx.append_to_leaf_block(list_level, Code, m['code'])
 
-def output_list(ctx: Ctx, list_depth: int, spaces: str, contents: str):
-  check_whitespace(ctx, 1, spaces, ' following `*`')
-  depth = list_depth + 1
-  pop_lists_to_depth(ctx, depth)
-  while ctx.list_depth < depth:
-    i = ctx.list_depth + 1
-    ctx.out(f'<ul class="L{i}">')
-    ctx.list_depth += 1
-  ctx.out(f'<li>{convert_text(ctx, contents)}</li>')
+  elif state == s_quote:
+    ctx.append_to_leaf_block(list_level, Quote, m['quote'])
+    if len(ctx.top.text_lines) == 1: # this is the first line.
+      ctx.stack[-1].quote_line_offset = ctx.line_num
 
+  elif state == s_text:
+    ctx.append_to_leaf_block(list_level, Text, m['text'])
 
-def output_code(ctx: Ctx, code: str):
-  ctx.code_lines.append(html_esc(code))
+  elif state == s_blank:
+    if len(indents): ctx.warn('blank line is not empty.')
+    ctx.close_leaf_block()
 
-
-def output_quote(ctx: Ctx, is_first: bool, quote: str):
-  if is_first:
-    ctx.quote_line_num = ctx.line_num
-  ctx.quote_lines.append(quote) # not converted here; text is fully transformed by finish_quote.
-
-
-def output_text(ctx: Ctx, text: str):
-  ctx.text_lines.append(text)
-
-
-def output_end(ctx: Ctx):
-  pop_sections_to_depth(ctx, 0)
-  if ctx.emit_doc and ctx.license_lines:
-    ctx.out('<footer id="footer">\n', '<br />\n'.join(ctx.license_lines), '\n</footer>')
+  else: ctx.error(f'bad state: {state}')
 
 
 def check_whitespace(ctx, len_exp, string, msg_suffix=''):
@@ -675,10 +756,11 @@ def embed_wu(ctx, f):
     src_lines=f,
     line_offset=0,
     is_versioned=True,
-    emit_js=False,
+    embed=ctx.embed,
     emit_doc=False,
+    emit_js=False,
     quote_depth=ctx.quote_depth)
-  return '\n'.join(embed_ctx.lines)
+  return '\n'.join(embed_ctx.emit_html())
 
 
 embed_dispatch = {
