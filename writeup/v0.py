@@ -20,7 +20,7 @@ def main() -> None:
   arg_parser = ArgumentParser(prog='writeup', description='Converts .wu files to html.')
   arg_parser.add_argument('src_path', nargs='?', help='Input .wu source path; defaults to <stdin>.')
   arg_parser.add_argument('dst_path', nargs='?', help='Output path: defaults to <stdout>.')
-  arg_parser.add_argument('-print-dependencies', action='store_true',
+  arg_parser.add_argument('-deps', action='store_true',
     help='Print external file dependencies of the input, one per line. Does not output HTML.')
   arg_parser.add_argument('-css', nargs='+', default=(), help='paths to CSS.')
   arg_parser.add_argument('-no-css', action='store_true', help='Omit default CSS.')
@@ -42,7 +42,7 @@ def main() -> None:
   if f_in == stdin and f_in.isatty():
     errSL('writeup: reading from stdin...')
 
-  if args.print_dependencies:
+  if args.deps:
     dependencies = writeup_dependencies(
       src_path=src_path,
       src_lines=f_in,
