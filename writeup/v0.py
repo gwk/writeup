@@ -105,7 +105,7 @@ def writeup(src_path: str, src_lines: Iterable[str], title: str, description: st
     yield '</head>'
     yield '<body id="body">'
 
-  yield from ctx.emit_html()
+  yield from ctx.emit_html(depth=0, quote_depth=0)
 
   if emit_doc:
     yield '</body>\n</html>'
@@ -143,12 +143,11 @@ class Line:
 
 class Block:
   'A tree node of block-level HTML content.'
-  def html(self, ctx: Ctx, depth: int): raise NotImplementedError
+  def html(self, ctx: Ctx, depth: int, quote_depth: int): raise NotImplementedError
 
 
 class Section(Block):
-  def __init__(self, quote_depth: int, section_depth: int, index_path: Tuple[int, ...], title: Line):
-    self.quote_depth = quote_depth
+  def __init__(self, section_depth: int, index_path: Tuple[int, ...], title: Line):
     self.section_depth = section_depth
     self.index_path = index_path
     self.title = title
@@ -159,16 +158,16 @@ class Section(Block):
   @property
   def sid(self): return '.'.join(str(i) for i in self.index_path)
 
-  def html(self, ctx: Ctx, depth: int):
+  def html(self, ctx: Ctx, depth: int, quote_depth: int):
     sid = self.sid
-    quote_prefix = f'q{self.quote_depth}' if self.quote_depth else ''
+    quote_prefix = f'q{quote_depth}' if quote_depth else ''
     ctx.out(depth, f'<section class="S{self.section_depth}" id="{quote_prefix}s{sid}">')
     h_num = min(6, self.section_depth)
-    ctx.out(depth + 1, f'<h{h_num} id="h{sid}">{convert_text(ctx, self.title)}</h{h_num}>')
+    ctx.out(depth + 1, f'<h{h_num} id="h{sid}">{convert_text(ctx, self.title, depth=depth, quote_depth=quote_depth)}</h{h_num}>')
     ctx.section_ids.append(sid)
     if depth <= 2: ctx.paging_ids.append(sid)
     for block in self.blocks:
-      block.html(ctx, depth + 1)
+      block.html(ctx, depth + 1, quote_depth=quote_depth)
     ctx.out(depth, '</section>')
 
 
@@ -180,10 +179,10 @@ class UList(Block):
 
   def __repr__(self): return f'UList({self.list_level}, {len(self.items)} items)'
 
-  def html(self, ctx: Ctx, depth: int):
+  def html(self, ctx: Ctx, depth: int, quote_depth: int):
     ctx.out(depth, f'<ul class="L{self.list_level}">')
     for item in self.items:
-      item.html(ctx, depth + 1)
+      item.html(ctx, depth + 1, quote_depth=quote_depth)
     ctx.out(depth, f'</ul>')
 
 
@@ -194,20 +193,20 @@ class ListItem(Block):
 
   def __repr__(self): return f'ListItem({self.list_level}, {len(self.blocks)} blocks)'
 
-  def html(self, ctx: Ctx, depth: int):
+  def html(self, ctx: Ctx, depth: int, quote_depth: int):
     if len(self.blocks) == 1 and isinstance(self.blocks[0], Text):
       if len(self.blocks[0].text_lines) == 1:
-        ctx.out(depth, f'<li>{convert_text(ctx, self.blocks[0].text_lines[0])}</li>')
+        ctx.out(depth, f'<li>{convert_text(ctx, self.blocks[0].text_lines[0], depth=depth, quote_depth=quote_depth)}</li>')
       else:
         #ctx.dbgSL("TEXTBLOCK")
         ctx.out(depth, f'<li>')
-        ctx.out_text_lines(depth + 1, text_lines=self.blocks[0].text_lines)
+        ctx.out_text_lines(depth + 1, quote_depth=quote_depth, text_lines=self.blocks[0].text_lines)
         ctx.out(depth, f'</li>')
     else:
       #ctx.dbgSL("BLOCKS")
       ctx.out(depth, f'<li>')
       for block in self.blocks:
-        block.html(ctx, depth + 1)
+        block.html(ctx, depth + 1, quote_depth=quote_depth)
       ctx.out(depth, f'</li>')
 
 
@@ -230,7 +229,7 @@ class Quote(LeafBlock):
     self.quote_line_offset = -1
 
 
-  def html(self, ctx: Ctx, depth: int):
+  def html(self, ctx: Ctx, depth: int, quote_depth: int):
     assert self.quote_line_offset >= 0
     quote_ctx = Ctx(
       src_path=ctx.src_path,
@@ -241,17 +240,16 @@ class Quote(LeafBlock):
       embed=ctx.embed,
       emit_js=False,
       emit_doc=False,
-      quote_depth=ctx.quote_depth + 1,
       dbg=ctx.dbg)
     ctx.out(depth, '<blockquote>')
-    for line in quote_ctx.emit_html():
+    for line in quote_ctx.emit_html(depth=0, quote_depth=quote_depth + 1):
       ctx.out(depth + 1, line)
     ctx.out(depth, '</blockquote>')
 
 
 class Code(LeafBlock):
 
-  def html(self, ctx: Ctx, depth: int) -> str:
+  def html(self, ctx: Ctx, depth: int, quote_depth: int) -> str:
     # a newline after the `pre` open tag looks ok,
     # but a final newline between content and the `pre` close tag looks bad.
     # therefore we must take care to format the contents without a final newline.
@@ -261,9 +259,9 @@ class Code(LeafBlock):
 
 class Text(LeafBlock):
 
-  def html(self, ctx: Ctx, depth: int):
+  def html(self, ctx: Ctx, depth: int, quote_depth: int):
     ctx.out(depth, '<p>')
-    ctx.out_text_lines(depth, self.text_lines)
+    ctx.out_text_lines(depth=depth, quote_depth=quote_depth, text_lines=self.text_lines)
     ctx.out(depth, '</p>')
 
 
@@ -275,7 +273,7 @@ class Ctx:
   '''
 
   def __init__(self, src_path: str, src_lines: Iterable[str], embed: bool, emit_doc: bool, emit_js: bool,
-   is_versioned=True, warn_missing_final_newline=True, line_offset=0, quote_depth=0, dbg=False) -> None:
+   is_versioned=True, warn_missing_final_newline=True, line_offset=0, dbg=False) -> None:
     self.src_path = src_path
     self.src_lines = src_lines
     self.embed = embed
@@ -284,7 +282,6 @@ class Ctx:
     self.is_versioned = is_versioned
     self.warn_missing_final_newline = warn_missing_final_newline
     self.line_offset = line_offset
-    self.quote_depth = quote_depth
     self.dbg = dbg
 
     self.search_dir = path_dir(src_path) or '.'
@@ -369,14 +366,14 @@ class Ctx:
   def out(self, depth: int, *items: str) -> None:
     self.html_lines.append('  ' * depth + ''.join(items))
 
-  def out_text_lines(self, depth: int, text_lines: List[str]):
+  def out_text_lines(self, depth: int, quote_depth: int, text_lines: List[str]):
     for i, line in enumerate(text_lines):
       if i: self.out(depth, '<br />')
-      self.out(depth + 1, convert_text(self, line))
+      self.out(depth + 1, convert_text(self, line, depth=depth, quote_depth=quote_depth))
 
-  def emit_html(self):
+  def emit_html(self, depth: int, quote_depth: int):
     for block in self.blocks:
-      block.html(ctx=self, depth=0)
+      block.html(ctx=self, depth=depth, quote_depth=quote_depth)
     return self.html_lines
 
   def dep(self, dependency: str) -> None:
@@ -504,7 +501,7 @@ def writeup_line(ctx: Ctx, state: int, m: Re.Match) -> None:
       prev_index = ctx.pop_to_section_depth(section_depth - 1)
       parent_path = ctx.top.index_path if ctx.stack else ()
       index_path = parent_path + (prev_index+1,)
-    section = Section(quote_depth=ctx.quote_depth, section_depth=section_depth, index_path=index_path, title=m['section_title'])
+    section = Section(section_depth=section_depth, index_path=index_path, title=m['section_title'])
     ctx.push(section)
     return
 
@@ -563,7 +560,7 @@ def check_whitespace(ctx, len_exp, string, msg_suffix=''):
   return True
 
 
-def convert_text(ctx: Ctx, text: str):
+def convert_text(ctx: Ctx, text: str, depth: int, quote_depth: int):
   'convert writeup span elements in a text string to html.'
   converted = []
   prev_idx = 0
@@ -575,14 +572,14 @@ def convert_text(ctx: Ctx, text: str):
     flush(start_idx)
     prev_idx = m.end()
     i = m.lastindex or 0
-    fn = span_fns[i]
-    group = m.group(i)
-    converted.append(fn(ctx, group))
+    span_fn = span_fns[i]
+    group_text = m.group(i)
+    converted.append(span_fn(ctx, group_text, depth=depth, quote_depth=quote_depth))
   flush(len(text))
   return ''.join(converted).strip()
 
 
-def span_angle_conv(ctx: Ctx, text: str):
+def span_angle_conv(ctx: Ctx, text: str, depth: int, quote_depth: int):
   'convert generic angle bracket span to html.'
   tag, colon, body = text.partition(':')
   if colon is None: ctx.error(f'malformed span is missing colon after tag: {text!r}')
@@ -590,10 +587,10 @@ def span_angle_conv(ctx: Ctx, text: str):
     f = span_dispatch[tag]
   except KeyError:
     ctx.error(f'span has invalid tag: {tag!r}')
-  return f(ctx, tag, body.strip())
+  return f(ctx, tag, body.strip(), depth=depth, quote_depth=quote_depth)
 
 
-def span_code_conv(ctx: Ctx, text: str):
+def span_code_conv(ctx: Ctx, text: str, depth: int, quote_depth: int):
   'convert backtick code span to html.'
   span_char_esc_fn = lambda m: m.group(0)[1:] # strip leading '\' escape.
   text_escaped = span_code_esc_re.sub(span_char_esc_fn, text)
@@ -602,7 +599,7 @@ def span_code_conv(ctx: Ctx, text: str):
   return f'<code>{text_spaced}</code>'
 
 
-def span_text_conv(ctx: Ctx, text: str):
+def span_text_conv(ctx: Ctx, text: str, depth: int, quote_depth: int):
   return html_esc(text)
 
 
@@ -633,11 +630,11 @@ span_re = re.compile('|'.join(p for p, _ in span_pairs))
 
 # generic angle bracket spans.
 
-def span_bold(ctx: Ctx, tag: str, text: str) -> str:
+def span_bold(ctx: Ctx, tag: str, text: str, depth: int, quote_depth: int) -> str:
   'convert a `bold` span into html.'
   return f'<b>{html_esc(text)}</b>'
 
-def span_embed(ctx: Ctx, tag: str, text: str) -> str:
+def span_embed(ctx: Ctx, tag: str, text: str, depth: int, quote_depth: int) -> str:
   'convert an `embed` span into html.'
   target_path = path_join(ctx.search_dir, text)
   if target_path.startswith('./'):
@@ -648,13 +645,13 @@ def span_embed(ctx: Ctx, tag: str, text: str) -> str:
   except FileNotFoundError:
     ctx.error(f'embedded file not found: {target_path!r}')
   ext = split_ext(target_path)[1]
-  try: fn = embed_dispatch[ext]
+  try: embed_fn = embed_dispatch[ext]
   except KeyError:
     ctx.error(f'embedded file has unknown extension type: {target_path!r}')
-  return fn(ctx, f)
+  return embed_fn(ctx, f, depth=depth, quote_depth=quote_depth)
 
 
-def span_link(ctx: Ctx, tag: str, text: str) -> str:
+def span_link(ctx: Ctx, tag: str, text: str, depth: int, quote_depth: int) -> str:
   'convert a `link` span into html.'
   words = text.split()
   if not words:
@@ -671,7 +668,7 @@ def span_link(ctx: Ctx, tag: str, text: str) -> str:
   return f'<a href={html_esc_attr(link)}>{html_esc(visible)}</a>'
 
 
-def span_span(ctx: Ctx, tag: str, text: str) -> str:
+def span_span(ctx: Ctx, tag: str, text: str, depth: int, quote_depth: int) -> str:
   'convert a `span` span into html.'
   attrs = []
   body = []
@@ -706,12 +703,12 @@ span_dispatch = {
 }
 
 
-def embed_css(ctx, f):
+def embed_css(ctx, f, depth: int, quote_depth: int):
   css = f.read()
   return f'<style type="text/css">{css}</style>'
 
 
-def embed_csv(ctx, f):
+def embed_csv(ctx, f, depth: int, quote_depth: int):
   from csv import reader
   csv_reader = reader(f)
   it = iter(csv_reader)
@@ -735,32 +732,28 @@ def embed_csv(ctx, f):
   return ''.join(table)
 
 
-def embed_direct(ctx, f):
+def embed_direct(ctx, f, depth: int, quote_depth: int):
   return f.read()
 
 
-def embed_img(ctx, f):
+def embed_img(ctx, f, depth: int, quote_depth: int):
   return f'<img src={f.name}>'
 
 
-def embed_txt(ctx, f):
+def embed_txt(ctx, f, depth: int, quote_depth: int):
   return f'<pre>\n{f.read()}</pre>'
 
 
-def embed_wu(ctx, f):
-  lines: List[str] = []
+def embed_wu(ctx, f, depth: int, quote_depth: int):
   embed_ctx = Ctx(
-    out_lines=lines,
-    out_dependencies=ctx.dependencies,
     src_path=f.name,
     src_lines=f,
     line_offset=0,
     is_versioned=True,
     embed=ctx.embed,
     emit_doc=False,
-    emit_js=False,
-    quote_depth=ctx.quote_depth)
-  return '\n'.join(embed_ctx.emit_html())
+    emit_js=False)
+  return '\n'.join(embed_ctx.emit_html(depth=depth, quote_depth=quote_depth))
 
 
 embed_dispatch = {
