@@ -61,7 +61,7 @@ def main() -> None:
       exit(f'writeup: css file does not exist: {args.css!r}')
 
   else:
-    html_lines = list(writeup(
+    html_lines_gen = writeup(
       src_path=src_path,
       src_lines=f_in,
       title=split_ext(path_name(src_path))[0],
@@ -71,8 +71,8 @@ def main() -> None:
       js=(None if args.frag or args.no_js else minify_js(default_js)),
       emit_doc=(not args.frag),
       dbg=args.dbg,
-    ))
-    for line in html_lines:
+    )
+    for line in html_lines_gen:
       print(line, file=f_out)
 
 
@@ -107,8 +107,18 @@ def writeup(src_path: str, src_lines: Iterable[str], title: str, description: st
 
   yield from ctx.emit_html(depth=0, quote_depth=0)
 
+  if bool(js):
+    # Generate tables.
+    yield '<script type="text/javascript"> "use strict";'
+    section_ids = ','.join(f"'s{sid}'" for sid in ctx.section_ids)
+    yield f'section_ids = [{section_ids}];'
+    paging_ids = ','.join(f"'s{pid}'" for pid in ctx.paging_ids)
+    yield f"paging_ids = ['body', {paging_ids}];"
+    yield '</script>'
   if emit_doc:
     yield '</body>\n</html>'
+    if ctx.license_lines:
+      yield '<footer id="footer">\n', '<br />\n'.join(ctx.license_lines), '\n</footer>'
 
 
 def writeup_dependencies(src_path: str, src_lines: Iterable[str], dir_names: Optional[List[Any]]=None, dbg=False) -> List[str]:
@@ -158,17 +168,17 @@ class Section(Block):
   @property
   def sid(self): return '.'.join(str(i) for i in self.index_path)
 
-  def html(self, ctx: Ctx, depth: int, quote_depth: int):
+  def html(self, ctx: Ctx, depth: int, quote_depth: int) -> Iterable[str]:
     sid = self.sid
     quote_prefix = f'q{quote_depth}' if quote_depth else ''
-    ctx.out(depth, f'<section class="S{self.section_depth}" id="{quote_prefix}s{sid}">')
+    yield indent(depth, f'<section class="S{self.section_depth}" id="{quote_prefix}s{sid}">')
     h_num = min(6, self.section_depth)
-    ctx.out(depth + 1, f'<h{h_num} id="h{sid}">{convert_text(ctx, self.title, depth=depth, quote_depth=quote_depth)}</h{h_num}>')
+    yield indent(depth + 1, f'<h{h_num} id="h{sid}">{convert_text(ctx, self.title, depth=depth, quote_depth=quote_depth)}</h{h_num}>')
     ctx.section_ids.append(sid)
     if depth <= 2: ctx.paging_ids.append(sid)
     for block in self.blocks:
-      block.html(ctx, depth + 1, quote_depth=quote_depth)
-    ctx.out(depth, '</section>')
+      yield from block.html(ctx, depth + 1, quote_depth=quote_depth)
+    yield indent(depth, '</section>')
 
 
 class UList(Block):
@@ -180,10 +190,10 @@ class UList(Block):
   def __repr__(self): return f'UList({self.list_level}, {len(self.items)} items)'
 
   def html(self, ctx: Ctx, depth: int, quote_depth: int):
-    ctx.out(depth, f'<ul class="L{self.list_level}">')
+    yield indent(depth, f'<ul class="L{self.list_level}">')
     for item in self.items:
-      item.html(ctx, depth + 1, quote_depth=quote_depth)
-    ctx.out(depth, f'</ul>')
+      yield from item.html(ctx, depth + 1, quote_depth=quote_depth)
+    yield indent(depth, f'</ul>')
 
 
 class ListItem(Block):
@@ -196,18 +206,20 @@ class ListItem(Block):
   def html(self, ctx: Ctx, depth: int, quote_depth: int):
     if len(self.blocks) == 1 and isinstance(self.blocks[0], Text):
       if len(self.blocks[0].text_lines) == 1:
-        ctx.out(depth, f'<li>{convert_text(ctx, self.blocks[0].text_lines[0], depth=depth, quote_depth=quote_depth)}</li>')
+        yield indent(depth, f'<li>{convert_text(ctx, self.blocks[0].text_lines[0], depth=depth, quote_depth=quote_depth)}</li>')
       else:
         #ctx.dbgSL("TEXTBLOCK")
-        ctx.out(depth, f'<li>')
-        ctx.out_text_lines(depth + 1, quote_depth=quote_depth, text_lines=self.blocks[0].text_lines)
-        ctx.out(depth, f'</li>')
+        yield indent(depth, f'<li>')
+        for i, line in enumerate(self.blocks[0].text_lines):
+          if i: yield indent(depth, '<br />')
+          yield indent(depth + 1, convert_text(ctx, line, depth=depth, quote_depth=quote_depth))
+        yield indent(depth, f'</li>')
     else:
       #ctx.dbgSL("BLOCKS")
-      ctx.out(depth, f'<li>')
+      yield indent(depth, f'<li>')
       for block in self.blocks:
-        block.html(ctx, depth + 1, quote_depth=quote_depth)
-      ctx.out(depth, f'</li>')
+        yield from block.html(ctx, depth + 1, quote_depth=quote_depth)
+      yield indent(depth, f'</li>')
 
 
 BranchBlock = Union[Section, UList, ListItem]
@@ -241,10 +253,10 @@ class Quote(LeafBlock):
       emit_js=False,
       emit_doc=False,
       dbg=ctx.dbg)
-    ctx.out(depth, '<blockquote>')
+    yield indent(depth, '<blockquote>')
     for line in quote_ctx.emit_html(depth=0, quote_depth=quote_depth + 1):
-      ctx.out(depth + 1, line)
-    ctx.out(depth, '</blockquote>')
+      yield indent(depth + 1, line)
+    yield indent(depth, '</blockquote>')
 
 
 class Code(LeafBlock):
@@ -254,15 +266,17 @@ class Code(LeafBlock):
     # but a final newline between content and the `pre` close tag looks bad.
     # therefore we must take care to format the contents without a final newline.
     contents = '\n'.join(html_esc(line) for line in self.text_lines)
-    ctx.out(depth, f'<pre>\n{contents}</pre>')
+    yield indent(depth, f'<pre>\n{contents}</pre>')
 
 
 class Text(LeafBlock):
 
   def html(self, ctx: Ctx, depth: int, quote_depth: int):
-    ctx.out(depth, '<p>')
-    ctx.out_text_lines(depth=depth, quote_depth=quote_depth, text_lines=self.text_lines)
-    ctx.out(depth, '</p>')
+    yield indent(depth, '<p>')
+    for i, line in enumerate(self.text_lines):
+      if i: yield indent(depth, '<br />')
+      yield indent(depth + 1, convert_text(ctx, line, depth=depth, quote_depth=quote_depth))
+    yield indent(depth, '</p>')
 
 
 
@@ -288,7 +302,6 @@ class Ctx:
     self.license_lines: List[str] = []
     self.stack: List[Block] = [] # stack of currently open content blocks.
     self.blocks: List[Block] = [] # top level blocks.
-    self.html_lines: List[str] = []
     self.dependencies: List[str] = []
     self.section_ids: List[str] = [] # accumulated list of all section ids.
     self.paging_ids: List[str] = [] # accumulated list of all paging (level 1 & 2) section ids.
@@ -363,18 +376,9 @@ class Ctx:
       self.pop()
       assert not self.stack or isinstance(self.top, (Section, ListItem))
 
-  def out(self, depth: int, *items: str) -> None:
-    self.html_lines.append('  ' * depth + ''.join(items))
-
-  def out_text_lines(self, depth: int, quote_depth: int, text_lines: List[str]):
-    for i, line in enumerate(text_lines):
-      if i: self.out(depth, '<br />')
-      self.out(depth + 1, convert_text(self, line, depth=depth, quote_depth=quote_depth))
-
   def emit_html(self, depth: int, quote_depth: int):
     for block in self.blocks:
-      block.html(ctx=self, depth=depth, quote_depth=quote_depth)
-    return self.html_lines
+      yield from block.html(ctx=self, depth=depth, quote_depth=quote_depth)
 
   def dep(self, dependency: str) -> None:
     self.dependencies.append(dependency)
@@ -470,17 +474,8 @@ def parse(ctx: Ctx):
     prev_state = state
 
   # Finish.
-  ctx.stack.clear()
-  if ctx.emit_doc and ctx.license_lines:
-    ctx.out(0, '<footer id="footer">\n', '<br />\n'.join(ctx.license_lines), '\n</footer>')
-  if ctx.emit_js:
-    # Generate tables.
-    ctx.out(0, '<script type="text/javascript"> "use strict";')
-    section_ids = ','.join(f"'s{sid}'" for sid in ctx.section_ids)
-    ctx.out(0, f'section_ids = [{section_ids}];')
-    paging_ids = ','.join(f"'s{pid}'" for pid in ctx.paging_ids)
-    ctx.out(0, f"paging_ids = ['body', {paging_ids}];")
-    ctx.out(0, '</script>')
+  while ctx.stack:
+    ctx.stack.pop()
 
 
 def writeup_line(ctx: Ctx, state: int, m: Re.Match) -> None:
@@ -778,6 +773,10 @@ def html_esc(text: str):
 
 def html_esc_attr(text: str):
   return html_escape(text, quote=True)
+
+
+def indent(depth: int, *items: str) -> str:
+  return '  ' * depth + ''.join(items)
 
 
 # Error reporting.
