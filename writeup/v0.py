@@ -635,7 +635,7 @@ def span_embed(ctx: Ctx, tag: str, text: str, depth: int, quote_depth: int) -> s
   if target_path.startswith('./'):
     target_path = target_path[2:]
   ctx.dep(target_path)
-  if not ctx.embed: return ''
+  if not ctx.embed: return f'[{tag}: {text}]'
   try: f = open(target_path)
   except FileNotFoundError:
     ctx.error(f'embedded file not found: {target_path!r}')
