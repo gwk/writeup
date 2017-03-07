@@ -149,6 +149,7 @@ class Line:
 
 class Block:
   'A tree node of block-level HTML content.'
+  def finish(self, ctx): pass
   def html(self, ctx: Ctx, depth: int, quote_depth: int): raise NotImplementedError
 
 
@@ -164,14 +165,17 @@ class Section(Block):
   @property
   def sid(self): return '.'.join(str(i) for i in self.index_path)
 
+  def finish(self, ctx: Ctx):
+    sid = self.sid
+    ctx.section_ids.append(sid)
+    if self.section_depth <= 2: ctx.paging_ids.append(sid)
+
   def html(self, ctx: Ctx, depth: int, quote_depth: int) -> Iterable[str]:
     sid = self.sid
     quote_prefix = f'q{quote_depth}' if quote_depth else ''
     yield indent(depth, f'<section class="S{self.section_depth}" id="{quote_prefix}s{sid}">')
     h_num = min(6, self.section_depth)
     yield indent(depth + 1, f'<h{h_num} id="h{sid}">{convert_text(ctx, self.title, depth=depth, quote_depth=quote_depth)}</h{h_num}>')
-    ctx.section_ids.append(sid)
-    if depth <= 2: ctx.paging_ids.append(sid)
     for block in self.blocks:
       yield from block.html(ctx, depth + 1, quote_depth=quote_depth)
     yield indent(depth, '</section>')
@@ -233,11 +237,10 @@ class LeafBlock(Block):
 class Quote(LeafBlock):
   def __init__(self):
     super().__init__()
-    self.blocks: List[Block] = [] # TODO: not yet used.
     self.quote_line_offset = -1
+    self.blocks: List[Block] = []
 
-
-  def html(self, ctx: Ctx, depth: int, quote_depth: int):
+  def finish(self, ctx: Ctx):
     assert self.quote_line_offset >= 0
     quote_ctx = Ctx(
       src_path=ctx.src_path,
@@ -247,9 +250,12 @@ class Quote(LeafBlock):
       warn_missing_final_newline=False,
       embed=ctx.embed,
       dbg=ctx.dbg)
+    self.blocks = quote_ctx.blocks
+
+  def html(self, ctx: Ctx, depth: int, quote_depth: int):
     yield indent(depth, '<blockquote>')
-    for line in quote_ctx.emit_html(depth=0, quote_depth=quote_depth + 1):
-      yield indent(depth + 1, line)
+    for block in self.blocks:
+      yield from block.html(ctx, depth=depth + 1, quote_depth=quote_depth + 1)
     yield indent(depth, '</blockquote>')
 
 
@@ -329,7 +335,9 @@ class Ctx:
 
   def pop(self) -> Block:
     self.dbgSL('POP', self.line_num, self.stack)
-    return self.stack.pop()
+    popped = self.stack.pop()
+    popped.finish(self)
+    return popped
 
   def pop_to_section_depth(self, section_depth: int) -> int:
     prev_index = 0
