@@ -84,8 +84,6 @@ def writeup(src_path: str, src_lines: Iterable[str], title: str, description: st
     src_path=src_path,
     src_lines=src_lines,
     embed=True,
-    emit_doc=emit_doc,
-    emit_js=bool(js),
     dbg=dbg)
 
   if emit_doc:
@@ -130,8 +128,6 @@ def writeup_dependencies(src_path: str, src_lines: Iterable[str], dir_names: Opt
     src_path=src_path,
     src_lines=src_lines,
     embed=False,
-    emit_js=False,
-    emit_doc=False,
     dbg=dbg)
   return sorted(ctx.dependencies)
 
@@ -250,8 +246,6 @@ class Quote(LeafBlock):
       is_versioned=False,
       warn_missing_final_newline=False,
       embed=ctx.embed,
-      emit_js=False,
-      emit_doc=False,
       dbg=ctx.dbg)
     yield indent(depth, '<blockquote>')
     for line in quote_ctx.emit_html(depth=0, quote_depth=quote_depth + 1):
@@ -286,13 +280,11 @@ class Ctx:
   Converts input writeup source text to output html lines and dependencies.
   '''
 
-  def __init__(self, src_path: str, src_lines: Iterable[str], embed: bool, emit_doc: bool, emit_js: bool,
+  def __init__(self, src_path: str, src_lines: Iterable[str], embed: bool,
    is_versioned=True, warn_missing_final_newline=True, line_offset=0, dbg=False) -> None:
     self.src_path = src_path
     self.src_lines = src_lines
     self.embed = embed
-    self.emit_doc = emit_doc
-    self.emit_js = emit_js
     self.is_versioned = is_versioned
     self.warn_missing_final_newline = warn_missing_final_newline
     self.line_offset = line_offset
@@ -745,9 +737,7 @@ def embed_wu(ctx, f, depth: int, quote_depth: int):
     src_lines=f,
     line_offset=0,
     is_versioned=True,
-    embed=ctx.embed,
-    emit_doc=False,
-    emit_js=False)
+    embed=ctx.embed)
   return '\n'.join(embed_ctx.emit_html(depth=depth, quote_depth=quote_depth))
 
 
