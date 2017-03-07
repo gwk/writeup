@@ -129,6 +129,7 @@ def writeup_dependencies(src_path: str, src_lines: Iterable[str], dir_names: Opt
     src_lines=src_lines,
     embed=False,
     dbg=dbg)
+  for _ in ctx.emit_html(depth=0, quote_depth=0): pass
   return sorted(ctx.dependencies)
 
 
