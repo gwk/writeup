@@ -1,5 +1,5 @@
-<section class="S1" id="s1">
-  <h1 id="h1">Writeup</h1>
+<section class="S1" id="s0">
+  <h1 id="h0">Writeup</h1>
   <p>
     Writeup is a text markup format that translates to HTML5. It is similar to Markdown in spirit, but is not equivalent. Some differences:
   </p>
@@ -15,8 +15,8 @@
   <p>
     The project is hosted at <a href=https:github.com/gwk/writeup>https:github.com/gwk/writeup</a>, with documentation at <a href=https:gwk.github.io/writeup>https:gwk.github.io/writeup</a>.
   </p>
-  <section class="S2" id="s1.1">
-    <h2 id="h1.1">License</h2>
+  <section class="S2" id="s0.1">
+    <h2 id="h0.1">License</h2>
     <p>
       All of the source code and documentation is dedicated to the public domain under CC0: <a href=https://creativecommons.org/.publicdomain/zero/1.0/>https://creativecommons.org/.publicdomain/zero/1.0/</a>.
     </p>
