@@ -17,7 +17,7 @@ cov:
 	iotest -fail-fast -coverage
 
 docs:
-	writeup -frag -section Writeup doc/index.wu readme.md
+	writeup -bare -section Writeup doc/index.wu readme.md
 	writeup doc/index.wu docs/index.html
 
 pip-develop:

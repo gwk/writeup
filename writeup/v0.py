@@ -25,7 +25,7 @@ def main() -> None:
   arg_parser.add_argument('-css', nargs='+', default=(), help='paths to CSS.')
   arg_parser.add_argument('-no-css', action='store_true', help='Omit default CSS.')
   arg_parser.add_argument('-no-js', action='store_true', help='Omit default Javascript.')
-  arg_parser.add_argument('-frag', action='store_true', help='Omit the top-level HTML document structure.')
+  arg_parser.add_argument('-bare', action='store_true', help='Omit the top-level HTML document structure.')
   arg_parser.add_argument('-section', help='Emit only the specified section.')
   arg_parser.add_argument('-dbg', action='store_true', help='print debug info.')
 
@@ -53,7 +53,7 @@ def main() -> None:
       print(dep, file=f_out)
     exit(0)
 
-  css = [] if (args.frag or args.no_css) else [default_css]
+  css = [] if (args.bare or args.no_css) else [default_css]
   for path in args.css:
     try:
       with open(path) as f:
@@ -69,8 +69,8 @@ def main() -> None:
       description='', # TODO.
       author='', # TODO.
       css=minify_css('\n'.join(css)),
-      js=(None if args.frag or args.no_js else minify_js(default_js)),
-      emit_doc=(not args.frag),
+      js=(None if args.bare or args.no_js else minify_js(default_js)),
+      emit_doc=(not args.bare),
       target_section=args.section,
       dbg=args.dbg,
     )
