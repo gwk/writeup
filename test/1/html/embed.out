@@ -12,18 +12,20 @@ Text contents.
     <h2 id="h1.1">empty</h2>
     <p>
       <table>
-</tbody></table>
+      </table>
     </p>
   </section>
   <section class="S2" id="s1.2">
     <h2 id="h1.2">non-empty</h2>
     <p>
       <table>
-<thead><tr><th>A</th><th>B</th><th>C</th></tr></thead>
-<tbody>
-<tr><td>1</td><td>2</td><td>3</td></tr>
-<tr><td>4</td><td>5</td><td>6</td></tr>
-</tbody></table>
+      <thead><tr>
+        <th>A</th><th>B</th><th>C</th>
+      </tr></thead><tbody>
+        <tr><td>1</td><td>2</td><td>3</td></tr>
+        <tr><td>4</td><td>5</td><td>6</td></tr>
+      </tbody>
+      </table>
     </p>
   </section>
 </section>
@@ -31,8 +33,8 @@ Text contents.
   <h1 id="h2">svg</h1>
   <p>
     <svg width="4em" height="4em" viewBox="0 0 4 4">
-  <circle cx="2" cy="2" r="1"/>
-</svg>
+      <circle cx="2" cy="2" r="1"/>
+    </svg>
   </p>
 </section>
 <section class="S1" id="s3">
@@ -45,7 +47,7 @@ Text contents.
   <h1 id="h4">wu</h1>
   <p>
     <p>
-    line.
-  </p>
+      line.
+    </p>
   </p>
 </section>

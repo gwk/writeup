@@ -83,7 +83,7 @@ def writeup(src_path: str, src_lines: Iterable[str], title: str, description: st
   ctx = Ctx(
     src_path=src_path,
     src_lines=src_lines,
-    embed=True,
+    should_embed=True,
     dbg=dbg)
 
   if emit_doc:
@@ -103,7 +103,7 @@ def writeup(src_path: str, src_lines: Iterable[str], title: str, description: st
     yield '</head>'
     yield '<body id="body">'
 
-  yield from ctx.emit_html(depth=0, quote_depth=0)
+  yield from ctx.emit_html(depth=0)
 
   if bool(js):
     # Generate tables.
@@ -127,9 +127,8 @@ def writeup_dependencies(src_path: str, src_lines: Iterable[str], dir_names: Opt
   ctx = Ctx(
     src_path=src_path,
     src_lines=src_lines,
-    embed=False,
+    should_embed=False,
     dbg=dbg)
-  for _ in ctx.emit_html(depth=0, quote_depth=0): pass
   return sorted(ctx.dependencies)
 
 
@@ -138,30 +137,92 @@ class Ctx: ...
 
 class Span:
   'A tree node of inline HTML content.'
-  def __init__(self, attrs, text):
-    self.attrs = attrs
+  def __init__(self, text: str):
     self.text = text
 
+  def html(self, depth: int) -> str:
+    return html_esc(self.text)
 
-class Line:
-  def __int__(self, spans: List[Span]):
-    self.spans = spans
+
+Spans = Tuple[Span, ...]
+
+
+class CodeSpan(Span):
+  def html(self, depth: int) -> str:
+    'convert backtick code span to html.'
+    span_char_esc_fn = lambda m: m.group(0)[1:] # strip leading '\' escape.
+    text_escaped = span_code_esc_re.sub(span_char_esc_fn, self.text)
+    text_escaped_html = html_esc(text_escaped)
+    text_spaced = text_escaped_html.replace(' ', '&nbsp;') # TODO: should this be breaking space for long strings?
+    return f'<code>{text_spaced}</code>'
+
+
+class AttrSpan(Span):
+  def __init__(self, text: str, attrs: Dict[str, str]):
+    super().__init__(text=text)
+    self.attrs = attrs
+
+
+class BoldSpan(AttrSpan):
+  def html(self, depth: int) -> str:
+    return f'<b>{html_esc(self.text)}</b>'
+
+
+class EmbedSpan(AttrSpan):
+  def __init__(self, text: str, attrs: Dict[str, str], path: str, contents: List[str]):
+    super().__init__(text=text, attrs=attrs)
+    self.path = path
+    self.contents = contents
+
+  def html(self, depth: int) -> str:
+    j = '\n' + '  ' * (depth + 1)
+    return j.join(self.contents) # TODO: migrate various embed html details up to here?
+
+
+class GenericSpan(AttrSpan):
+  def __init__(self, text: str, attrs: Dict[str, str]):
+    super().__init__(text=text, attrs=attrs)
+
+  def html(self, depth: int) -> str:
+    attr_str = ' '.join(f'{k}={v}' for k, v in self.attrs)
+    return f"<span {attr_str}>{html_esc(self.text)}</span>"
+
+
+class LinkSpan(AttrSpan):
+  def __init__(self, text: str, attrs: Dict[str, str], tag: str):
+    super().__init__(text=text, attrs=attrs)
+    self.tag = tag
+    words = self.text.split(' ')
+    if not words:
+      ctx.error(f'link is empty: {self.tag!r}')
+    if tag == 'link':
+      self.link = words[0]
+    else:
+      self.link = f'{self.tag}:{words[0]}'
+    if len(words) == 1:
+      self.visible = self.link
+    else:
+      self.visible = ' '.join(words[1:])
+
+  def html(self, depth: int) -> str:
+    return f'<a href={html_esc_attr(self.link)}>{html_esc(self.visible)}</a>'
 
 
 class Block:
   'A tree node of block-level HTML content.'
   def finish(self, ctx): pass
-  def html(self, ctx: Ctx, depth: int, quote_depth: int): raise NotImplementedError
+  def html(self, ctx: Ctx, depth: int) -> Iterable[str]: raise NotImplementedError
 
 
 class Section(Block):
-  def __init__(self, section_depth: int, index_path: Tuple[int, ...], title: Line):
+  def __init__(self, section_depth: int, quote_depth: int, index_path: Tuple[int, ...], title: Spans):
     self.section_depth = section_depth
+    self.quote_depth = quote_depth
     self.index_path = index_path
     self.title = title
     self.blocks: List[Block] = []
 
-  def __repr__(self): return f'Section({self.sid}, {self.title!r}, {len(self.blocks)} blocks)'
+  def __repr__(self): return f'Section({self.sid}, {self.title}, {len(self.blocks)} blocks)'
 
   @property
   def sid(self): return '.'.join(str(i) for i in self.index_path)
@@ -171,14 +232,14 @@ class Section(Block):
     ctx.section_ids.append(sid)
     if self.section_depth <= 2: ctx.paging_ids.append(sid)
 
-  def html(self, ctx: Ctx, depth: int, quote_depth: int) -> Iterable[str]:
+  def html(self, ctx: Ctx, depth: int) -> Iterable[str]:
     sid = self.sid
-    quote_prefix = f'q{quote_depth}' if quote_depth else ''
+    quote_prefix = f'q{self.quote_depth}' if self.quote_depth else ''
     yield indent(depth, f'<section class="S{self.section_depth}" id="{quote_prefix}s{sid}">')
     h_num = min(6, self.section_depth)
-    yield indent(depth + 1, f'<h{h_num} id="h{sid}">{convert_text(ctx, self.title, depth=depth, quote_depth=quote_depth)}</h{h_num}>')
+    yield indent(depth + 1, f'<h{h_num} id="h{sid}">{html_for_spans(self.title, depth=depth)}</h{h_num}>')
     for block in self.blocks:
-      yield from block.html(ctx, depth + 1, quote_depth=quote_depth)
+      yield from block.html(ctx, depth + 1)
     yield indent(depth, '</section>')
 
 
@@ -190,10 +251,10 @@ class UList(Block):
 
   def __repr__(self): return f'UList({self.list_level}, {len(self.items)} items)'
 
-  def html(self, ctx: Ctx, depth: int, quote_depth: int):
+  def html(self, ctx: Ctx, depth: int) -> Iterable[str]:
     yield indent(depth, f'<ul class="L{self.list_level}">')
     for item in self.items:
-      yield from item.html(ctx, depth + 1, quote_depth=quote_depth)
+      yield from item.html(ctx, depth + 1)
     yield indent(depth, f'</ul>')
 
 
@@ -204,22 +265,20 @@ class ListItem(Block):
 
   def __repr__(self): return f'ListItem({self.list_level}, {len(self.blocks)} blocks)'
 
-  def html(self, ctx: Ctx, depth: int, quote_depth: int):
+  def html(self, ctx: Ctx, depth: int) -> Iterable[str]:
     if len(self.blocks) == 1 and isinstance(self.blocks[0], Text):
-      if len(self.blocks[0].text_lines) == 1:
-        yield indent(depth, f'<li>{convert_text(ctx, self.blocks[0].text_lines[0], depth=depth, quote_depth=quote_depth)}</li>')
+      if len(self.blocks[0].lines) == 1:
+        yield indent(depth, f'<li>{html_for_spans(self.blocks[0].lines[0], depth=depth)}</li>')
       else:
-        #ctx.dbgSL("TEXTBLOCK")
         yield indent(depth, f'<li>')
-        for i, line in enumerate(self.blocks[0].text_lines):
+        for i, line in enumerate(self.blocks[0].lines):
           if i: yield indent(depth, '<br />')
-          yield indent(depth + 1, convert_text(ctx, line, depth=depth, quote_depth=quote_depth))
+          yield indent(depth + 1, html_for_spans(line, depth=depth))
         yield indent(depth, f'</li>')
     else:
-      #ctx.dbgSL("BLOCKS")
       yield indent(depth, f'<li>')
       for block in self.blocks:
-        yield from block.html(ctx, depth + 1, quote_depth=quote_depth)
+        yield from block.html(ctx, depth + 1)
       yield indent(depth, f'</li>')
 
 
@@ -246,23 +305,24 @@ class Quote(LeafBlock):
     quote_ctx = Ctx(
       src_path=ctx.src_path,
       src_lines=self.text_lines,
+      quote_depth=ctx.quote_depth + 1,
       line_offset=self.quote_line_offset,
       is_versioned=False,
       warn_missing_final_newline=False,
-      embed=ctx.embed,
+      should_embed=ctx.should_embed,
       dbg=ctx.dbg)
     self.blocks = quote_ctx.blocks
 
-  def html(self, ctx: Ctx, depth: int, quote_depth: int):
+  def html(self, ctx: Ctx, depth: int) -> Iterable[str]:
     yield indent(depth, '<blockquote>')
     for block in self.blocks:
-      yield from block.html(ctx, depth=depth + 1, quote_depth=quote_depth + 1)
+      yield from block.html(ctx, depth=depth + 1)
     yield indent(depth, '</blockquote>')
 
 
 class Code(LeafBlock):
 
-  def html(self, ctx: Ctx, depth: int, quote_depth: int) -> str:
+  def html(self, ctx: Ctx, depth: int) -> Iterable[str]:
     # a newline after the `pre` open tag looks ok,
     # but a final newline between content and the `pre` close tag looks bad.
     # therefore we must take care to format the contents without a final newline.
@@ -271,12 +331,18 @@ class Code(LeafBlock):
 
 
 class Text(LeafBlock):
+  def __init__(self):
+    super().__init__()
+    self.lines: List[Spans] = []
 
-  def html(self, ctx: Ctx, depth: int, quote_depth: int):
+  def finish(self, ctx: Ctx):
+    self.lines = [parse_spans(ctx, text=line) for line in self.text_lines]
+
+  def html(self, ctx: Ctx, depth: int) -> Iterable[str]:
     yield indent(depth, '<p>')
-    for i, line in enumerate(self.text_lines):
+    for i, line in enumerate(self.lines):
       if i: yield indent(depth, '<br />')
-      yield indent(depth + 1, convert_text(ctx, line, depth=depth, quote_depth=quote_depth))
+      yield indent(depth + 1, html_for_spans(line, depth=depth))
     yield indent(depth, '</p>')
 
 
@@ -287,13 +353,14 @@ class Ctx:
   Converts input writeup source text to output html lines and dependencies.
   '''
 
-  def __init__(self, src_path: str, src_lines: Iterable[str], embed: bool,
-   is_versioned=True, warn_missing_final_newline=True, line_offset=0, dbg=False) -> None:
+  def __init__(self, src_path: str, src_lines: Iterable[str], should_embed: bool,
+   is_versioned=True, warn_missing_final_newline=True, quote_depth=0, line_offset=0, dbg=False) -> None:
     self.src_path = src_path
     self.src_lines = src_lines
-    self.embed = embed
+    self.should_embed = should_embed
     self.is_versioned = is_versioned
     self.warn_missing_final_newline = warn_missing_final_newline
+    self.quote_depth = quote_depth
     self.line_offset = line_offset
     self.dbg = dbg
 
@@ -377,11 +444,11 @@ class Ctx:
       self.pop()
       assert not self.stack or isinstance(self.top, (Section, ListItem))
 
-  def emit_html(self, depth: int, quote_depth: int):
+  def emit_html(self, depth: int):
     for block in self.blocks:
-      yield from block.html(ctx=self, depth=depth, quote_depth=quote_depth)
+      yield from block.html(ctx=self, depth=depth)
 
-  def dep(self, dependency: str) -> None:
+  def add_dependency(self, dependency: str) -> None:
     self.dependencies.append(dependency)
 
   def warn(self, *items):
@@ -476,7 +543,7 @@ def parse(ctx: Ctx):
 
   # Finish.
   while ctx.stack:
-    ctx.stack.pop()
+    ctx.pop()
 
 
 def writeup_line(ctx: Ctx, state: int, m: Re.Match) -> None:
@@ -497,7 +564,8 @@ def writeup_line(ctx: Ctx, state: int, m: Re.Match) -> None:
       prev_index = ctx.pop_to_section_depth(section_depth - 1)
       parent_path = ctx.top.index_path if ctx.stack else ()
       index_path = parent_path + (prev_index+1,)
-    section = Section(section_depth=section_depth, index_path=index_path, title=m['section_title'])
+    title = parse_spans(ctx, text=m['section_title'])
+    section = Section(section_depth=section_depth, quote_depth=ctx.quote_depth, index_path=index_path, title=title)
     ctx.push(section)
     return
 
@@ -556,13 +624,12 @@ def check_whitespace(ctx, len_exp, string, msg_suffix=''):
   return True
 
 
-def convert_text(ctx: Ctx, text: str, depth: int, quote_depth: int):
-  'convert writeup span elements in a text string to html.'
-  converted = []
+def parse_spans(ctx: Ctx, text: str) -> Spans:
+  spans = []
   prev_idx = 0
   def flush(curr_idx):
     if prev_idx < curr_idx:
-      converted.append(html_esc(text[prev_idx:curr_idx]))
+      spans.append(Span(text=text[prev_idx:curr_idx]))
   for m in span_re.finditer(text):
     start_idx = m.start()
     flush(start_idx)
@@ -570,33 +637,56 @@ def convert_text(ctx: Ctx, text: str, depth: int, quote_depth: int):
     i = m.lastindex or 0
     span_fn = span_fns[i]
     group_text = m.group(i)
-    converted.append(span_fn(ctx, group_text, depth=depth, quote_depth=quote_depth))
+    spans.append(span_fn(ctx, group_text))
   flush(len(text))
-  return ''.join(converted).strip()
+  return tuple(spans)
 
 
-def span_angle_conv(ctx: Ctx, text: str, depth: int, quote_depth: int):
+def span_angle_conv(ctx: Ctx, text: str) -> Span:
   'convert generic angle bracket span to html.'
-  tag, colon, body = text.partition(':')
+  tag, colon, post_tag_text = text.partition(':')
   if colon is None: ctx.error(f'malformed span is missing colon after tag: {text!r}')
-  try:
-    f = span_dispatch[tag]
-  except KeyError:
-    ctx.error(f'span has invalid tag: {tag!r}')
-  return f(ctx, tag, body.strip(), depth=depth, quote_depth=quote_depth)
+
+  attrs = []
+  body_chunks = []
+  in_body = False
+  for word in post_tag_text.split(' '):
+    if in_body: body_chunks.append(word); continue
+    if word == '': continue
+    if word == ';': in_body = True; continue
+    key, eq, val = word.partition('=')
+    if not eq:
+      in_body = True
+      body_chunks.append(word)
+      continue
+    if val.endswith(';'):
+      in_body = True
+      val = val[:-1]
+    if not key.isalnum(): ctx.error(f'span attribute name is not alphanumeric: {word!r}')
+    if not val: ctx.error(f'span attribute value is empty; word: {word!r}')
+    if val[0] in ('"', "'") and (len(val) < 2 or val[0] != val[-1]):
+      ctx.error('span attribute value has mismatched quotes (possibly due to writeup doing naive splitting on whitespace);' \
+        f'word: {word!r}; val: {val!r}')
+    attrs.append((key, val))
+  if not body_chunks: ctx.error(f'no body')
+  body_text = ' '.join(body_chunks)
+
+  if tag == 'b':
+    return BoldSpan(text=body_text, attrs=attrs)
+  if tag == 'embed':
+    return embed(ctx, text=body_text, attrs=attrs)
+  if tag in ('http', 'https', 'link', 'mailto'):
+    span = LinkSpan(text=body_text, attrs=attrs, tag=tag)
+    if tag == 'link':
+      ctx.add_dependency(span.link)
+    return span
+  if tag == 'span':
+    return GenericSpan(text=body_text, attrs=attrs)
+  ctx.error(f'span has invalid tag: {tag!r}')
 
 
-def span_code_conv(ctx: Ctx, text: str, depth: int, quote_depth: int):
-  'convert backtick code span to html.'
-  span_char_esc_fn = lambda m: m.group(0)[1:] # strip leading '\' escape.
-  text_escaped = span_code_esc_re.sub(span_char_esc_fn, text)
-  text_escaped_html = html_esc(text_escaped)
-  text_spaced = text_escaped_html.replace(' ', '&nbsp;')
-  return f'<code>{text_spaced}</code>'
-
-
-def span_text_conv(ctx: Ctx, text: str, depth: int, quote_depth: int):
-  return html_esc(text)
+def span_code_conv(ctx: Ctx, text: str) -> Span:
+  return CodeSpan(text=text)
 
 
 # span regexes.
@@ -624,130 +714,77 @@ span_fns = (None,) + tuple(f for _, f in span_pairs) # Match.group() is 1-indexe
 span_re = re.compile('|'.join(p for p, _ in span_pairs))
 #^ wraps each span sub-pattern in capturing parentheses.
 
-# generic angle bracket spans.
 
-def span_bold(ctx: Ctx, tag: str, text: str, depth: int, quote_depth: int) -> str:
-  'convert a `bold` span into html.'
-  return f'<b>{html_esc(text)}</b>'
+# Embed.
 
-def span_embed(ctx: Ctx, tag: str, text: str, depth: int, quote_depth: int) -> str:
+
+def embed(ctx: Ctx, text: str, attrs: Dict[str, str]) -> Span:
   'convert an `embed` span into html.'
-  target_path = path_join(ctx.search_dir, text)
-  if target_path.startswith('./'):
-    target_path = target_path[2:]
-  ctx.dep(target_path)
-  if not ctx.embed: return f'[{tag}: {text}]'
-  try: f = open(target_path)
-  except FileNotFoundError:
-    ctx.error(f'embedded file not found: {target_path!r}')
-  ext = split_ext(target_path)[1]
-  try: embed_fn = embed_dispatch[ext]
-  except KeyError:
-    ctx.error(f'embedded file has unknown extension type: {target_path!r}')
-  return embed_fn(ctx, f, depth=depth, quote_depth=quote_depth)
-
-
-def span_link(ctx: Ctx, tag: str, text: str, depth: int, quote_depth: int) -> str:
-  'convert a `link` span into html.'
-  words = text.split()
-  if not words:
-    ctx.error(f'link is empty: {tag!r}: {text!r}')
-  if tag == 'link':
-    link = words[0]
-    ctx.dep(words[0])
+  path = path_join(ctx.search_dir, text)
+  if path.startswith('./'):
+    path = path[2:]
+  ctx.add_dependency(path)
+  if ctx.should_embed:
+    try: f = open(path)
+    except FileNotFoundError:
+      ctx.error(f'embedded file not found: {path!r}')
+    ext = split_ext(path)[1]
+    try: embed_fn = embed_dispatch[ext]
+    except KeyError:
+      ctx.error(f'embedded file has unknown extension type: {path!r}')
+    contents = embed_fn(ctx, f)
   else:
-    link = f'{tag}:{words[0]}'
-  if len(words) == 1:
-    visible = link
-  else:
-    visible = ' '.join(words[1:])
-  return f'<a href={html_esc_attr(link)}>{html_esc(visible)}</a>'
+    contents = []
+  return EmbedSpan(text=text, attrs=attrs, path=path, contents=contents)
 
 
-def span_span(ctx: Ctx, tag: str, text: str, depth: int, quote_depth: int) -> str:
-  'convert a `span` span into html.'
-  attrs = []
-  body = []
-  found_semicolon = False
-  for word in text.split(' '):
-    if found_semicolon: body.append(word)
-    elif word == ';': found_semicolon = True
-    else:
-      if word.endswith(';'):
-        found_semicolon = True
-        word = word[:-1]
-      key, eq, val = word.partition('=')
-      if not eq: ctx.error(f'span attribute is missing `=`; word: {word!r}')
-      if not key.isalnum(): ctx.error(f'span attribute name is not alphanumeric: {word!r}')
-      if not val: ctx.error(f'span attribute value is empty; word: {word!r}')
-      if val[0] in ('"', "'") and (len(val) < 2 or val[0] != val[-1]):
-        ctx.error('span attribute value has mismatched quotes (possibly due to writeup doing naive splitting on whitespace);' \
-          f'word: {word!r}; val: {val!r}')
-      attrs.append(word)
-  if not found_semicolon: ctx.error(f'span attributes must be terminated with semicolon')
-  return f"<span {' '.join(attrs)}>{' '.join(body)}</span>"
-
-
-span_dispatch = {
-  'b' : span_bold,
-  'embed' : span_embed,
-  'http': span_link,
-  'https': span_link,
-  'link': span_link,
-  'mailto': span_link,
-  'span': span_span,
-}
-
-
-def embed_css(ctx, f, depth: int, quote_depth: int):
+def embed_css(ctx, f) -> List[str]:
   css = f.read()
-  return f'<style type="text/css">{css}</style>'
+  return [f'<style type="text/css">{css}</style>']
 
 
-def embed_csv(ctx, f, depth: int, quote_depth: int):
+def embed_csv(ctx, f) -> List[str]:
   from csv import reader
   csv_reader = reader(f)
   it = iter(csv_reader)
-  table = ['<table>\n']
+  lines = ['<table>']
 
-  def out(*els): table.extend(els)
+  def append(*els): lines.append(''.join(els))
 
   try: header = next(it)
   except StopIteration: pass
   else:
-    out('<thead>', '<tr>')
-    for col in header:
-        out(f'<th>{html_esc(col)}</th>')
-    out('</tr>', '</thead>\n', '<tbody>\n')
+    append('<thead>', '<tr>')
+    append('  ', *[f'<th>{html_esc(col)}</th>' for col in header])
+    append('</tr>', '</thead>', '<tbody>')
     for row in it:
-      out('<tr>')
-      for cell in row:
-        out(f'<td>{html_esc(cell)}</td>')
-      out('</tr>\n')
-  out('</tbody>', '</table>\n')
-  return ''.join(table)
+      append('  <tr>', *[f'<td>{html_esc(cell)}</td>' for cell in row], '</tr>')
+    append('</tbody>')
+  append('</table>')
+  return lines
 
 
-def embed_direct(ctx, f, depth: int, quote_depth: int):
-  return f.read()
+def embed_direct(ctx, f) -> List[str]:
+  return [line.rstrip() for line in f]
 
 
-def embed_img(ctx, f, depth: int, quote_depth: int):
-  return f'<img src={f.name}>'
+def embed_img(ctx, f) -> List[str]:
+  return [f'<img src={f.name}>']
 
 
-def embed_txt(ctx, f, depth: int, quote_depth: int):
-  return f'<pre>\n{f.read()}</pre>'
+def embed_txt(ctx, f) -> List[str]:
+  return [f'<pre>\n{f.read()}</pre>']
 
 
-def embed_wu(ctx, f, depth: int, quote_depth: int):
+def embed_wu(ctx, f) -> List[str]:
   embed_ctx = Ctx(
     src_path=f.name,
     src_lines=f,
+    quote_depth=ctx.quote_depth,
     line_offset=0,
     is_versioned=True,
-    embed=ctx.embed)
-  return '\n'.join(embed_ctx.emit_html(depth=depth, quote_depth=quote_depth))
+    should_embed=ctx.should_embed)
+  return list(embed_ctx.emit_html(depth=0))
 
 
 embed_dispatch = {
@@ -764,14 +801,20 @@ def _add_embed(fn, *exts):
 _add_embed(embed_direct, '.htm', '.html', '.svg')
 _add_embed(embed_img, '.gif', '.jpeg', '.jpg', '.png')
 
-# HTML escaping.
+
+# HTML output.
 
 def html_esc(text: str):
   # TODO: check for strange characters that html will ignore.
   return html_escape(text, quote=False)
 
+
 def html_esc_attr(text: str):
   return html_escape(text, quote=True)
+
+
+def html_for_spans(spans: Spans, depth: int) -> str:
+  return ''.join(span.html(depth=depth) for span in spans).strip()
 
 
 def indent(depth: int, *items: str) -> str:
