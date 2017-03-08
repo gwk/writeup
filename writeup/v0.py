@@ -26,6 +26,7 @@ def main() -> None:
   arg_parser.add_argument('-no-css', action='store_true', help='Omit default CSS.')
   arg_parser.add_argument('-no-js', action='store_true', help='Omit default Javascript.')
   arg_parser.add_argument('-frag', action='store_true', help='Omit the top-level HTML document structure.')
+  arg_parser.add_argument('-section', help='Emit only the specified section.')
   arg_parser.add_argument('-dbg', action='store_true', help='print debug info.')
 
   args = arg_parser.parse_args()
@@ -70,6 +71,7 @@ def main() -> None:
       css=minify_css('\n'.join(css)),
       js=(None if args.frag or args.no_js else minify_js(default_js)),
       emit_doc=(not args.frag),
+      target_section=args.section,
       dbg=args.dbg,
     )
     for line in html_lines_gen:
@@ -77,7 +79,7 @@ def main() -> None:
 
 
 def writeup(src_path: str, src_lines: Iterable[str], title: str, description: str, author: str,
-  css: Optional[str], js: Optional[str], emit_doc: bool, dbg: bool) -> Iterable[str]:
+  css: Optional[str], js: Optional[str], emit_doc: bool, target_section: Optional[str], dbg: bool) -> Iterable[str]:
   'generate a complete html document from a writeup file (or stream of lines).'
 
   ctx = Ctx(
@@ -103,7 +105,7 @@ def writeup(src_path: str, src_lines: Iterable[str], title: str, description: st
     yield '</head>'
     yield '<body id="body">'
 
-  yield from ctx.emit_html(depth=0)
+  yield from ctx.emit_html(depth=0, target_section=target_section)
 
   if bool(js):
     # Generate tables.
@@ -116,7 +118,9 @@ def writeup(src_path: str, src_lines: Iterable[str], title: str, description: st
   if emit_doc:
     yield '</body>\n</html>'
     if ctx.license_lines:
-      yield '<footer id="footer">\n', '<br />\n'.join(ctx.license_lines), '\n</footer>'
+      yield '<footer id="footer">'
+      yield '<br />\n'.join(ctx.license_lines)
+      yield '</footer>'
 
 
 def writeup_dependencies(src_path: str, src_lines: Iterable[str], dir_names: Optional[List[Any]]=None, dbg=False) -> List[str]:
@@ -227,13 +231,10 @@ class Section(Block):
   @property
   def sid(self): return '.'.join(str(i) for i in self.index_path)
 
-  def finish(self, ctx: Ctx):
+  def html(self, ctx: Ctx, depth: int) -> Iterable[str]:
     sid = self.sid
     ctx.section_ids.append(sid)
     if self.section_depth <= 2: ctx.paging_ids.append(sid)
-
-  def html(self, ctx: Ctx, depth: int) -> Iterable[str]:
-    sid = self.sid
     quote_prefix = f'q{self.quote_depth}' if self.quote_depth else ''
     yield indent(depth, f'<section class="S{self.section_depth}" id="{quote_prefix}s{sid}">')
     h_num = min(6, self.section_depth)
@@ -444,8 +445,10 @@ class Ctx:
       self.pop()
       assert not self.stack or isinstance(self.top, (Section, ListItem))
 
-  def emit_html(self, depth: int):
+  def emit_html(self, depth: int, target_section: Optional[str]=None):
     for block in self.blocks:
+      if target_section:
+        if not isinstance(block, Section) or text_for_spans(block.title) != target_section: continue
       yield from block.html(ctx=self, depth=depth)
 
   def add_dependency(self, dependency: str) -> None:
@@ -815,6 +818,10 @@ def html_esc_attr(text: str):
 
 def html_for_spans(spans: Spans, depth: int) -> str:
   return ''.join(span.html(depth=depth) for span in spans).strip()
+
+
+def text_for_spans(spans: Spans) -> str:
+  return ''.join(span.text for span in spans).strip()
 
 
 def indent(depth: int, *items: str) -> str:
