@@ -1,13 +1,12 @@
 <section class="S1" id="s0">
   <h1 id="h0">Writeup</h1>
   <p>
-    Writeup is a text markup format that translates to HTML5. It is similar to Markdown in spirit, but is not equivalent. Some differences:
+    Writeup is a text markup format that translates to HTML5. It is similar to Markdown in spirit, but not equivalent. Some differences:
   </p>
   <ul class="L1">
     <li>Hierarchical sections.</li>
     <li>Unambiguous character escape syntaxes.</li>
     <li>Built in Javascript presentation mode.</li>
-    <li>A line-oriented syntax designed to make correct implementation simple and unambiguous.</li>
     <li>A versioning scheme that should allow for format evolution while preserving the ability to build old source files.</li>
     <li>Special handling of leading version and license lines.</li>
     <li>Integration with <a href=https:github.com/gwk/muck>Muck</a>, a build tool for data projects.</li>
