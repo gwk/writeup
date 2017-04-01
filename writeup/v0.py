@@ -650,7 +650,7 @@ def span_angle_conv(ctx: Ctx, text: str) -> Span:
   tag, colon, post_tag_text = text.partition(':')
   if colon is None: ctx.error(f'malformed span is missing colon after tag: {text!r}')
 
-  attrs = []
+  attrs_list = []
   body_chunks = []
   in_body = False
   for word in post_tag_text.split(' '):
@@ -670,10 +670,11 @@ def span_angle_conv(ctx: Ctx, text: str) -> Span:
     if val[0] in ('"', "'") and (len(val) < 2 or val[0] != val[-1]):
       ctx.error('span attribute value has mismatched quotes (possibly due to writeup doing naive splitting on whitespace);' \
         f'word: {word!r}; val: {val!r}')
-    attrs.append((key, val))
+    attrs_list.append((key, val))
   if not body_chunks: ctx.error(f'no body')
   body_text = ' '.join(body_chunks)
 
+  attrs = dict(attrs_list)
   if tag == 'b':
     return BoldSpan(text=body_text, attrs=attrs)
   if tag == 'embed':
@@ -731,7 +732,9 @@ def embed(ctx: Ctx, text: str, attrs: Dict[str, str]) -> Span:
     try: f = open(path)
     except FileNotFoundError:
       ctx.error(f'embedded file not found: {path!r}')
-    ext = split_ext(path)[1]
+    ext = attrs.get('ext')
+    if not ext:
+      ext = split_ext(path)[1]
     try: embed_fn = embed_dispatch[ext]
     except KeyError:
       ctx.error(f'embedded file has unknown extension type: {path!r}')
@@ -767,6 +770,10 @@ def embed_csv(ctx, f) -> List[str]:
   return lines
 
 
+def embed_code(ctx, f) -> List[str]:
+  contents = '\n'.join(html_esc(line.rstrip()) for line in f)
+  return [f'<pre>\n{contents}</pre>'] # see Code.html for explanation.
+
 def embed_direct(ctx, f) -> List[str]:
   return [line.rstrip() for line in f]
 
@@ -801,6 +808,7 @@ def _add_embed(fn, *exts):
   embed_dispatch.update((ext, fn) for ext in exts)
 
 
+_add_embed(embed_code, '.js', '.py')
 _add_embed(embed_direct, '.htm', '.html', '.svg')
 _add_embed(embed_img, '.gif', '.jpeg', '.jpg', '.png')
 
