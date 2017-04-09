@@ -188,7 +188,7 @@ class GenericSpan(AttrSpan):
     super().__init__(text=text, attrs=attrs)
 
   def html(self, depth: int) -> str:
-    attr_str = ' '.join(f'{k}={v}' for k, v in self.attrs)
+    attr_str = ' '.join(f'{k}={v}' for k, v in self.attrs.items())
     return f"<span {attr_str}>{html_esc(self.text)}</span>"
 
 
