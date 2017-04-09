@@ -158,7 +158,7 @@ class CodeSpan(Span):
     text_escaped = span_code_esc_re.sub(span_char_esc_fn, self.text)
     text_escaped_html = html_esc(text_escaped)
     text_spaced = text_escaped_html.replace(' ', '&nbsp;') # TODO: should this be breaking space for long strings?
-    return f'<code>{text_spaced}</code>'
+    return f'<code class="inline">{text_spaced}</code>'
 
 
 class AttrSpan(Span):
@@ -324,11 +324,11 @@ class Quote(LeafBlock):
 class Code(LeafBlock):
 
   def html(self, ctx: Ctx, depth: int) -> Iterable[str]:
-    # a newline after the `pre` open tag looks ok,
-    # but a final newline between content and the `pre` close tag looks bad.
-    # therefore we must take care to format the contents without a final newline.
-    contents = '\n'.join(html_esc(line) for line in self.text_lines)
-    yield indent(depth, f'<pre>\n{contents}</pre>')
+    yield '<div class="code-block">'
+    for line in self.text_lines:
+      content = html_esc(line)
+      yield f'<code class="line">{content}</code>'
+    yield '</div>'
 
 
 class Text(LeafBlock):
@@ -865,7 +865,7 @@ def errSL(*items):
 
 # CSS.
 
-minify_css_re = re.compile(r'(?<=: )(.+?;)|\s+|/\*.*?\*/', flags=re.S)
+minify_css_re = re.compile(r'(?s)(?<=: )(.+?;)|\s+|/\*.*?\*/|//[^\n]*\n?')
 # need to preserve spaces in between multiple words followed by semicolon,
 # for cases like `margin: 0 0 0 0;`.
 # the first choice clause captures these chunks in group 1;
@@ -903,9 +903,26 @@ body footer {
   margin: 1rem 0 0 0;
 }
 code {
-  background-color: rgb(240, 240, 240);
-  border-radius: 3px;
   font-family: source code pro, menlo, terminal, monospace;
+}
+code.inline {
+  background-color: #F0F0F0;
+  border-radius: 3px;
+}
+code.line {
+  display: block;
+  margin: 0;
+  padding: 0 0 0 0.5rem;
+  text-indent: -0.5rem;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+}
+div.code-block {
+  font-size: 1rem;
+  background-color: #F0F0F0;
+  border-radius: 4px;
+  padding: 0.1rem;
+  margin: 1rem 0 1rem 0;
 }
 footer { display: block; }
 h1 { font-size: 1.6rem; margin: 0.8rem 0; }
@@ -923,14 +940,7 @@ html {
 }
 nav { display: block; }
 p { margin: 0.5rem 0; }
-pre {
-  background: #F0F0F0;
-  font-family: source code pro, menlo, terminal, monospace;
-  font-size: 1rem;
-  overflow: auto;
-  padding: 0.1rem;
-  border-radius: 4px;
-}
+
 section { display: block; }
 section.S1 {
   border-top-color: #E8E8E8;

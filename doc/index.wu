@@ -25,6 +25,7 @@ Writeup can take 0, 1 or 2 arguments, defaulting to `stdout` and `stdin` as foll
 | $ writeup file.wu > out
 | $ writeup file.wu file.html
 
+Here is the builtin help documentation:
 | $ writeup -h
 | usage: writeup [-h] [-deps] [-css CSS [CSS ...]] [-no-css] [-no-js] [-bare]
 |                [-section SECTION] [-dbg]
@@ -51,7 +52,7 @@ Writeup can take 0, 1 or 2 arguments, defaulting to `stdout` and `stdin` as foll
 # Format
 
 Writeup documents consist of:
-* An initial required version line, e.g.: `writeup v0`.
+* An initial required version line: `writeup v0`.
 * Optional consecutive copyright/license lines at the beginning of the document, followed by a blank line. Recognized prefixes are:
   * `©`
   * `Copyright`
@@ -92,7 +93,7 @@ Writeup differs from Github Flavored Markdown (GFD) substantially; here are some
 * By default the output HTML contains CSS, Javascript, and class attributes in order to stand alone; the Github markup system purposefully strips such content out of documents.
 * Writeup does not support:
   * Italics with `*`, bold with `**`, both with `_`, or strikethrough with `~~`.
-  * Markdown link syntax `[http://...](name...)`.
+  * Markdown link syntax `[http://…](name…)`.
   * Fenced codeblocks with `\`\`\``.
   * Tables.
   * Task lists.

@@ -8,7 +8,7 @@
   <br />
     Paragraph 1 line 2.
   <br />
-    <code>code&nbsp;span</code>. <b>bold text</b>. <span style=color:red>span style red</span>.
+    <code class="inline">code&nbsp;span</code>. <b>bold text</b>. <span style="color:red">span style red</span>.
   </p>
   <p>
     Paragraph 2.
@@ -66,15 +66,17 @@
           Double quote.
         </p>
       </blockquote>
-      <pre>
-Quoted code.</pre>
+<div class="code-block">
+<code class="line">Quoted code.</code>
+</div>
     </section>
   </blockquote>
 </section>
 <section class="S1" id="s3">
   <h1 id="h3">Section 3: Code</h1>
-  <pre>
-# Header 1
-Line 1.
-Line 2. `code span`.</pre>
+<div class="code-block">
+<code class="line"># Header 1</code>
+<code class="line">Line 1.</code>
+<code class="line">Line 2. `code span`.</code>
+</div>
 </section>
