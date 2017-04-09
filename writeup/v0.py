@@ -8,7 +8,7 @@ import re
 
 from argparse import ArgumentParser
 from html import escape as html_escape
-from os.path import dirname as path_dir, exists as path_exists, join as path_join, basename as path_name, splitext as split_ext
+from os.path import dirname as path_dir, exists as path_exists, join as path_join, basename as path_name, relpath as rel_path, splitext as split_ext
 from sys import stdin, stdout, stderr
 from typing import re as Re, Any, Callable, Dict, Iterable, List, Optional, Sequence, Union, Tuple
 
@@ -774,8 +774,28 @@ def embed_code(ctx, f) -> List[str]:
   contents = '\n'.join(html_esc(line.rstrip()) for line in f)
   return [f'<pre>\n{contents}</pre>'] # see Code.html for explanation.
 
+
 def embed_direct(ctx, f) -> List[str]:
   return [line.rstrip() for line in f]
+
+
+html_doc_re = re.compile(r'''(?xi)
+\s* < \s* (!doctype \s+)? html
+''')
+
+def embed_html(ctx, f) -> List[str]:
+  src_dir = path_dir(ctx.src_path) or '.'
+
+  lines = list(f)
+  head = ''
+  for head in lines:
+    if head.strip(): break
+  if html_doc_re.match(head): # looks like a complete html doc.
+    path = rel_path(f.name, start=src_dir)
+    msg = f'<error: missing object: {path!r}>'
+    return [f'<object data="{html_esc_attr(path)}" type="text/html">{html_esc(msg)}</object>']
+  else:
+    return list(line.rstrip() for line in lines)
 
 
 def embed_img(ctx, f) -> List[str]:
@@ -809,7 +829,8 @@ def _add_embed(fn, *exts):
 
 
 _add_embed(embed_code, '.js', '.py')
-_add_embed(embed_direct, '.htm', '.html', '.svg')
+_add_embed(embed_direct, '.svg')
+_add_embed(embed_html, '.htm', '.html')
 _add_embed(embed_img, '.gif', '.jpeg', '.jpg', '.png')
 
 
