@@ -90,13 +90,14 @@ def writeup(src_path: str, src_lines: Iterable[str], title: str, description: st
 
   if emit_doc:
     yield from [
+      '<!DOCTYPE html>',
       '<html>',
       '<head>',
-      '  <meta charset="utf-8">',
-      f'  <title>{title}</title>',
-      f'  <meta name="description" content="{description}">',
-      f'  <meta name="author" content="{author}">',
-      '  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">', # empty icon.
+      '  <meta charset="utf-8" />',
+      f' <title>{title}</title>',
+      f' <meta name="description" content="{description}" />',
+      f' <meta name="author" content="{author}" />',
+      '  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=" />', # empty icon.
     ]
     if css:
       yield f'  <style type="text/css">{css}</style>'
@@ -116,11 +117,11 @@ def writeup(src_path: str, src_lines: Iterable[str], title: str, description: st
     yield f"paging_ids = ['body', {paging_ids}];"
     yield '</script>'
   if emit_doc:
-    yield '</body>\n</html>'
     if ctx.license_lines:
       yield '<footer id="footer">'
       yield '<br />\n'.join(ctx.license_lines)
       yield '</footer>'
+    yield '</body>\n</html>'
 
 
 def writeup_dependencies(src_path: str, src_lines: Iterable[str], dir_names: Optional[List[Any]]=None, dbg=False) -> List[str]:
