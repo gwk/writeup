@@ -191,7 +191,7 @@ class GenericSpan(AttrSpan):
     super().__init__(text=text, attrs=attrs)
 
   def html(self, depth: int) -> str:
-    attr_str = ' '.join(f'{k}={v}' for k, v in self.attrs.items())
+    attr_str = ' '.join(f'{html_esc_attr(k)}="{html_esc_attr(v)}"' for k, v in self.attrs.items())
     return f"<span {attr_str}>{html_esc(self.text)}</span>"
 
 
@@ -212,7 +212,7 @@ class LinkSpan(AttrSpan):
       self.visible = ' '.join(words[1:])
 
   def html(self, depth: int) -> str:
-    return f'<a href={html_esc_attr(self.link)}>{html_esc(self.visible)}</a>'
+    return f'<a href="{html_esc_attr(self.link)}">{html_esc(self.visible)}</a>'
 
 
 class Block:
@@ -749,7 +749,7 @@ def embed(ctx: Ctx, text: str, attrs: Dict[str, str]) -> Span:
 
 def embed_css(ctx, f) -> List[str]:
   css = f.read()
-  return [f'<style type="text/css">{css}</style>']
+  return [f'<style type="text/css">{html_esc(css)}</style>']
 
 
 def embed_csv(ctx, f) -> List[str]:

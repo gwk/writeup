@@ -1,9 +1,9 @@
 <p>
-  <a href=http://github.com>http://github.com</a> <a href=http://github.com>github</a>
+  <a href="http://github.com">http://github.com</a> <a href="http://github.com">github</a>
 <br />
-  <a href=https://github.com>https://github.com</a> <a href=https://github.com>github</a>
+  <a href="https://github.com">https://github.com</a> <a href="https://github.com">github</a>
 <br />
-  <a href=test/assets/text.txt>test/assets/text.txt</a> <a href=test/assets/text.txt>text</a>
+  <a href="test/assets/text.txt">test/assets/text.txt</a> <a href="test/assets/text.txt">text</a>
 <br />
-  <a href=mailto:a@b.c>mailto:a@b.c</a> <a href=mailto:a@b.c>address</a>
+  <a href="mailto:a@b.c">mailto:a@b.c</a> <a href="mailto:a@b.c">address</a>
 </p>
