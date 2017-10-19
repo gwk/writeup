@@ -10,7 +10,7 @@ from argparse import ArgumentParser
 from html import escape as html_escape
 from os.path import dirname as path_dir, exists as path_exists, join as path_join, basename as path_name, relpath as rel_path, splitext as split_ext
 from sys import stdin, stdout, stderr
-from typing import re as Re, Any, Callable, Dict, Iterable, List, Optional, Sequence, Union, Tuple
+from typing import re as Re, Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Union, TextIO, Tuple
 
 
 __all__ = ['main', 'writeup', 'writeup_dependencies']
@@ -182,8 +182,14 @@ class EmbedSpan(AttrSpan):
     self.contents = contents
 
   def html(self, depth: int) -> str:
+    if attrs_bool(self.attrs, 'titled'):
+      label = f'<div class="embed-label">{html_esc(self.path)}</div>\n'
+    else:
+      label= ''
+
     j = '\n' + '  ' * (depth + 1)
-    return j.join(self.contents) # TODO: migrate various embed html details up to here?
+    # TODO: migrate various embed html details up to here?
+    return label + j.join(self.contents)
 
 
 class GenericSpan(AttrSpan):
@@ -196,10 +202,9 @@ class GenericSpan(AttrSpan):
 
 
 class LinkSpan(AttrSpan):
-  def __init__(self, text: str, attrs: Dict[str, str], tag: str):
+  def __init__(self, text: str, attrs: Dict[str, str], tag: str, words: [str]):
     super().__init__(text=text, attrs=attrs)
     self.tag = tag
-    words = self.text.split(' ')
     if not words:
       ctx.error(f'link is empty: {self.tag!r}')
     if tag == 'link':
@@ -649,47 +654,52 @@ def parse_spans(ctx: Ctx, text: str) -> Spans:
 
 
 def span_angle_conv(ctx: Ctx, text: str) -> Span:
-  'convert generic angle bracket span to html.'
+  'convert angle bracket span to html.'
   tag, colon, post_tag_text = text.partition(':')
   if colon is None: ctx.error(f'malformed span is missing colon after tag: {text!r}')
 
   attrs_list = []
-  body_chunks = []
+  body_words = []
   in_body = False
-  for word in post_tag_text.split(' '):
-    if in_body: body_chunks.append(word); continue
+  # TODO: better escaping syntax for equals.
+  for i, word in enumerate(post_tag_text.split(' ')):
+    if in_body or (i == 0 and tag in span_link_tags):
+      # hack: for URLs; do not partition first word because URL might contain '='.
+      body_words.append(word); continue
     if word == '': continue
     if word == ';': in_body = True; continue
     key, eq, val = word.partition('=')
     if not eq:
-      in_body = True
-      body_chunks.append(word)
+      body_words.append(word)
       continue
     if val.endswith(';'):
       in_body = True
       val = val[:-1]
-    if not key.isalnum(): ctx.error(f'span attribute name is not alphanumeric: {word!r}')
+    if not sym_re.fullmatch(key): ctx.error(f'span attribute name is invalid: {word!r}')
     if not val: ctx.error(f'span attribute value is empty; word: {word!r}')
     if val[0] in ('"', "'") and (len(val) < 2 or val[0] != val[-1]):
       ctx.error('span attribute value has mismatched quotes (possibly due to writeup doing naive splitting on whitespace);' \
         f'word: {word!r}; val: {val!r}')
     attrs_list.append((key, val))
-  if not body_chunks: ctx.error(f'no body')
-  body_text = ' '.join(body_chunks)
+  if not body_words: ctx.error(f'span has no body (missing colon after the tag?)')
+  body_text = ' '.join(body_words)
 
   attrs = dict(attrs_list)
   if tag == 'b':
     return BoldSpan(text=body_text, attrs=attrs)
   if tag == 'embed':
     return embed(ctx, text=body_text, attrs=attrs)
-  if tag in ('http', 'https', 'link', 'mailto'):
-    span = LinkSpan(text=body_text, attrs=attrs, tag=tag)
+  if tag in span_link_tags:
+    span = LinkSpan(text=body_text, attrs=attrs, tag=tag, words=body_words)
     if tag == 'link':
       ctx.add_dependency(span.link)
     return span
   if tag == 'span':
     return GenericSpan(text=body_text, attrs=attrs)
   ctx.error(f'span has invalid tag: {tag!r}')
+
+
+span_link_tags = { 'http', 'https', 'link', 'mailto' }
 
 
 def span_code_conv(ctx: Ctx, text: str) -> Span:
@@ -741,18 +751,18 @@ def embed(ctx: Ctx, text: str, attrs: Dict[str, str]) -> Span:
     try: embed_fn = embed_dispatch[ext]
     except KeyError:
       ctx.error(f'embedded file has unknown extension type: {path!r}')
-    contents = embed_fn(ctx, f)
+    contents = tuple(embed_fn(ctx, f))
   else:
     contents = []
   return EmbedSpan(text=text, attrs=attrs, path=path, contents=contents)
 
 
-def embed_css(ctx, f) -> List[str]:
+def embed_css(ctx: Ctx, f: TextIO) -> List[str]:
   css = f.read()
   return [f'<style type="text/css">{html_esc(css)}</style>']
 
 
-def embed_csv(ctx, f) -> List[str]:
+def embed_csv(ctx: Ctx, f: TextIO) -> List[str]:
   from csv import reader
   csv_reader = reader(f)
   it = iter(csv_reader)
@@ -773,43 +783,45 @@ def embed_csv(ctx, f) -> List[str]:
   return lines
 
 
-def embed_code(ctx, f) -> List[str]:
-  contents = '\n'.join(html_esc(line.rstrip()) for line in f)
-  return [f'<pre>\n{contents}</pre>'] # see Code.html for explanation.
+def embed_code(ctx: Ctx, f: TextIO) -> Iterator[str]:
+  yield '<div class="code-block">'
+  for line in f:
+    content = html_esc(line)
+    yield f'<code class="line">{content}</code>'
+  yield '</div>'
 
 
-def embed_direct(ctx, f) -> List[str]:
-  return [line.rstrip() for line in f]
+def embed_direct(ctx: Ctx, f: TextIO) -> List[str]:
+  return list(filter(None, (xml_processing_instruction_re.sub('', line.rstrip()) for line in f)))
+
+xml_processing_instruction_re = re.compile(r'<\?[^>]*>')
 
 
-html_doc_re = re.compile(r'''(?xi)
-\s* < \s* (!doctype \s+)? html
-''')
-
-def embed_html(ctx, f) -> List[str]:
+def embed_html(ctx: Ctx, f: TextIO) -> List[str]:
   src_dir = path_dir(ctx.src_path) or '.'
-
   lines = list(f)
   head = ''
   for head in lines:
     if head.strip(): break
   if html_doc_re.match(head): # looks like a complete html doc.
+    # TODO: we shouldn't just leave a cryptic error message here.
+    # Use an iframe? Or does object tag work for this purpose?
     path = rel_path(f.name, start=src_dir)
     msg = f'<error: missing object: {path!r}>'
     return [f'<object data="{html_esc_attr(path)}" type="text/html">{html_esc(msg)}</object>']
   else:
     return list(line.rstrip() for line in lines)
 
-
-def embed_img(ctx, f) -> List[str]:
-  return [f'<img src={f.name}>']
-
-
-def embed_txt(ctx, f) -> List[str]:
-  return [f'<pre>\n{f.read()}</pre>']
+html_doc_re = re.compile(r'''(?xi)
+\s* < \s* (!doctype \s+)? html
+''')
 
 
-def embed_wu(ctx, f) -> List[str]:
+def embed_img(ctx: Ctx, f: TextIO) -> List[str]:
+  return [f'<img src={html_esc(f.name)}>']
+
+
+def embed_wu(ctx: Ctx, f: TextIO) -> List[str]:
   embed_ctx = Ctx(
     src_path=f.name,
     src_lines=f,
@@ -820,10 +832,9 @@ def embed_wu(ctx, f) -> List[str]:
   return list(embed_ctx.emit_html(depth=0))
 
 
-embed_dispatch = {
+embed_dispatch: Dict[str, Callable[[Ctx, TextIO], Iterable[str]]] = {
   '.css'  : embed_css,
   '.csv'  : embed_csv,
-  '.txt'  : embed_txt,
   '.wu'   : embed_wu,
 }
 
@@ -831,10 +842,17 @@ def _add_embed(fn, *exts):
   embed_dispatch.update((ext, fn) for ext in exts)
 
 
-_add_embed(embed_code, '.js', '.py')
+_add_embed(embed_code, '.bash', '.js', '.py', '.sh', '.sql', '.swift', '.txt')
 _add_embed(embed_direct, '.svg')
 _add_embed(embed_html, '.htm', '.html')
 _add_embed(embed_img, '.gif', '.jpeg', '.jpg', '.png')
+
+
+sym_re = re.compile(r'[-_\w]+')
+
+
+def attrs_bool(attrs: Dict[str, str], key: str) -> bool:
+  return attrs.get(key) in {'true', 'yes'}
 
 
 # HTML output.
@@ -887,15 +905,19 @@ default_css = '''
 a { background-color: transparent; }
 a:active { outline: 0; }
 a:hover { outline: 0; }
+a:link { color: #1010A0; }
+a:visited { color: #301080; border-bottom: 3px solid;  }
 blockquote {
   border-left-color: #E0E0E0;
   border-left-style: solid;
   border-left-width: 0.333rem;
   margin: 0;
-  padding: 0 0.677rem;
+  padding: 0 0.667rem;
 }
 body {
-  margin: 1rem;
+  margin: 0 auto;
+  max-width: 64rem;
+  border: transparent solid 0.5rem; // hack to get horizontal minimum margin.
   }
 body footer {
   border-top-color: #E8E8E8;
@@ -906,34 +928,60 @@ body footer {
   margin: 1rem 0 0 0;
 }
 code {
-  font-family: source code pro, menlo, terminal, monospace;
+  font-family: source code pro, terminal, monospace;
 }
 code.inline {
   background-color: #F0F0F0;
-  border-radius: 3px;
+  border-color: #D0D0D0;
+  border-radius: 2px;
+  border-style: solid;
+  border-width: 0.5px;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
 }
 code.line {
   display: block;
   margin: 0;
+  overflow-wrap: break-word;
   padding: 0 0 0 0.5rem;
   text-indent: -0.5rem;
-  overflow-wrap: break-word;
   white-space: pre-wrap;
 }
 div.code-block {
-  font-size: 1rem;
   background-color: #F0F0F0;
+  border-color: #D0D0D0;
   border-radius: 4px;
+  border-style: solid;
+  border-width: 0.5px;
+  font-size: 1rem;
+  margin: 1rem 0;
   padding: 0.1rem;
-  margin: 1rem 0 1rem 0;
+}
+div.embed-label {
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-color: #E0E0E0;
+  border-style: solid solid none solid;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  border-width: 0.5px;
+  color: #404040;
+  display: inline-block;
+  font-family: source code pro, terminal, monospace;
+  font-size: 0.8rem;
+  margin-top: 1rem;
+}
+div.embed-label + * {
+  border-top-left-radius: 0;
+  margin-top: 0.5px;
 }
 footer { display: block; }
-h1 { font-size: 1.6rem; margin: 0.8rem 0; }
-h2 { font-size: 1.4rem; margin: 0.7rem 0; }
-h3 { font-size: 1.3rem; margin: 0.6rem 0; }
-h4 { font-size: 1.2rem; margin: 0.5rem 0; }
-h5 { font-size: 1.1rem; margin: 0.4rem 0; }
-h6 { font-size: 1.0rem; margin: 0.3rem 0; }
+h1 { font-size: 1.8rem; margin: 0.9rem 0; }
+h2 { font-size: 1.6rem; margin: 0.8rem 0; }
+h3 { font-size: 1.4rem; margin: 0.7rem 0; }
+h4 { font-size: 1.3rem; margin: 0.65rem 0; }
+h5 { font-size: 1.2rem; margin: 0.6rem 0; }
+h6 { font-size: 1.1rem; margin: 0.55rem 0; }
 header { display: block; }
 html {
   background: white;
@@ -943,81 +991,65 @@ html {
 }
 nav { display: block; }
 p { margin: 0.5rem 0; }
-
 section { display: block; }
 section.S1 {
   border-top-color: #E8E8E8;
   border-top-style: solid;
   border-top-width: 1px;
-  margin: 1.6rem 0;
+  margin: 1.8rem 0;
 }
-section.S2 { margin: 1.4rem 0; }
-section.S3 { margin: 1.3rem 0; }
-section.S4 { margin: 1.2rem 0; }
-section.S5 { margin: 1.1rem 0; }
-section.S6 { margin: 1.0rem 0; }
-
+section.S2 { margin: 1.6rem 0; }
+section.S3 { margin: 1.4rem 0; }
+section.S4 { margin: 1.3rem 0; }
+section.S5 { margin: 1.2rem 0; }
+section.S6 { margin: 1.1rem 0; }
 section#s0 {
   border-top-width: 0;
 }
-
 table {
-  font-family: sans-serif;
-  color:#666;
-  background:#eaebec;
-  margin:16px;
-  border:#ccc 1px solid;
-  border-radius:3px;
-  box-shadow: 0 1px 2px #d1d1d1;
+  background: #F0F0F0;
+  border-radius: 4px;
+  border: #D0D0D0 0.5px solid;
 }
-
 table th {
-  padding:20px 24px 20px 24px;
-  border-top:1px solid #fafafa;
-  border-bottom:1px solid #e0e0e0;
-  background: #ededed;
+  padding: 0.25rem 0.25rem;
 }
 table th:first-child {
+  padding-left: 0.25rem;
   text-align: left;
-  padding-left:20px;
-}
-table tr:first-child th:first-child {
-  border-top-left-radius:3px;
-}
-table tr:first-child th:last-child {
-  border-top-right-radius:3px;
-}
-table tr {
-  text-align: left;
-  padding-left:20px;
-}
-table td:first-child {
-  text-align: left;
-  padding-left:20px;
-  border-left: 0;
 }
 table td {
-  padding:8px;
-  border-top: 1px solid #ffffff;
-  border-bottom:1px solid #e0e0e0;
-  border-left: 1px solid #e0e0e0;
-
-  background: #fafafa;
+  background: #FAFAFA;
+  font-family: monospace;
+  padding:0.25rem;
+  white-space: pre;
 }
-table tr.even td {
-  background: #f6f6f6;
+table td:first-child {
+  border-left: 0;
+  padding-left: 0.25rem;
+  text-align: left;
+}
+table tr {
+  padding-left: 0.25rem;
+  text-align: left;
 }
 table tr:last-child td {
-  border-bottom:0;
+  border-bottom: 0;
 }
 table tr:last-child td:first-child {
-  border-bottom-left-radius:3px;
+  border-bottom-left-radius: 2px;
 }
 table tr:last-child td:last-child {
-  border-bottom-right-radius:3px;
+  border-bottom-right-radius: 2px;
+}
+table tr:nth-child(odd) td {
+  background: #FFFFFF;
+}
+table tr:nth-child(even) td {
+  background: #FBFBFB;
 }
 table tr:hover td {
-  background: #f2f2f2;
+  background: #F0F0F0;
 }
 
 ul {

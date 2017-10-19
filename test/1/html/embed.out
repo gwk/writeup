@@ -1,9 +1,10 @@
 <section class="S1" id="s0">
   <h1 id="h0">txt</h1>
   <p>
-    <pre>
-Text contents.
-</pre>
+    <div class="code-block">
+    <code class="line">Text contents.
+</code>
+    </div>
   </p>
 </section>
 <section class="S1" id="s1">
