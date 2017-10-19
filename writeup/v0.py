@@ -148,6 +148,8 @@ class Span:
   def html(self, depth: int) -> str:
     return html_esc(self.text)
 
+  def __repr__(self):
+    return f'{self.__class__.__name__}({self.text!r})'
 
 Spans = Tuple[Span, ...]
 
