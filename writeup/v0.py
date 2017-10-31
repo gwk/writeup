@@ -36,8 +36,10 @@ def main() -> None:
   if args.src_path == args.dst_path and args.src_path is not None:
     exit(f'source path and destination path cannot be the same path: {args.src_path!r}')
 
-  f_in  = open(args.src_path) if args.src_path else stdin
-  f_out = open(args.dst_path, 'w') if args.dst_path else stdout
+  try:
+    f_in  = open(args.src_path) if args.src_path else stdin
+    f_out = open(args.dst_path, 'w') if args.dst_path else stdout
+  except FileNotFoundError as e: exit(f'writeup error: file does not exist: {e.filename}')
   src_path = f_in.name
 
   if f_in == stdin and f_in.isatty():
