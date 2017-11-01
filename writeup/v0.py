@@ -465,11 +465,11 @@ class Ctx:
     self.dependencies.append(dependency)
 
   def warn(self, *items):
-    errSL(f'writeup warning: {self.src_path}:{self.line_num+1}:', *items)
+    errSL(f'{self.src_path}:{self.line_num+1}: warning:', *items)
     errSL(f'  {self.line!r}')
 
   def error(self, *items):
-    errSL(f'writeup error: {self.src_path}:{self.line_num+1}:', *items)
+    errSL(f'{self.src_path}:{self.line_num+1}: error:', *items)
     errSL(f'  {self.line!r}')
     exit(1)
 
@@ -521,9 +521,12 @@ def parse(ctx: Ctx):
       version_line = ''
     m = version_re.fullmatch(version_line)
     if not m:
-      exit(f'writeup error: first line must specify writeup version matching pattern: {version_re.pattern!r}\n  found: {version_line!r}')
+      exit(f'{ctx.src_path}:1:1: error: first line must specify writeup version matching pattern: {version_re.pattern!r}\n'
+        '  (The only currently supported version number is 0.)')
     version = int(m.group(1))
-    if version != 0: exit(f'unsupported version number: {version}')
+    if version != 0:
+      exit(f'{ctx.src_path}:1:10: error: unsupported version number: {version}\n'
+        '  (The only currently supported version number is 0.)')
     ctx.line_offset += 1
 
   # Iterate over lines.

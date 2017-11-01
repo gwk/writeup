@@ -1,2 +1,2 @@
-writeup error: <stdin>:4: odd indentation length: 1.
+<stdin>:4: error: odd indentation length: 1.
   ' * single space indent.'
