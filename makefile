@@ -17,8 +17,9 @@ cov:
 	iotest -fail-fast -coverage
 
 docs:
-	writeup -bare -section Writeup doc/index.wu readme.md
-	writeup doc/index.wu docs/index.html
+	muck doc/index.html
+	cp _build/doc/*.html docs
+	html-extract docs/index.html -id s0 > readme.md
 
 pip-develop:
 	pip3 install -e .

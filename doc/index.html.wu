@@ -5,16 +5,18 @@ Dedicated to the public domain under CC0: https://creativecommons.org/publicdoma
 # Writeup
 
 Writeup is a text markup format that translates to HTML5. It is similar to Markdown in spirit, but not equivalent. Some differences:
-* Hierarchical sections.
-* Unambiguous character escape syntaxes.
-* Built in Javascript presentation mode.
-* A versioning scheme that should allow for format evolution while preserving the ability to build old source files.
-* Special handling of leading version and license lines.
-* Integration with <https:github.com/gwk/muck Muck>, a build tool for data projects.
+* Writeup documents can embed the contents of other files, with sensible default styling.
+* Writeup has unambiguous character escape syntaxes.
+* The output HTML document is organized into hierarchical sections.
+* An optional lightweight presentation mode (implemented with embedded JavaScript) makes Writeup useful for simple technical slide decks.
+* A required syntax version at the top of every Writeup document allows the format to evolve while preserving the ability to render older documents exactly as originally intended.
+* Special handling copyright/license header lines.
+* Integration with <https:gwk.github.io/muck Muck>, a build tool for data projects.
 
 The project is hosted at <https:github.com/gwk/writeup>, with documentation at <https:gwk.github.io/writeup>.
 
 ## License
+
 All of the source code and documentation is dedicated to the public domain under CC0: <https://creativecommons.org/.publicdomain/zero/1.0/>.
 
 
@@ -26,27 +28,7 @@ Writeup can take 0, 1 or 2 arguments, defaulting to `stdout` and `stdin` as foll
 | $ writeup file.wu file.html
 
 Here is the builtin help documentation:
-| $ writeup -h
-| usage: writeup [-h] [-deps] [-css CSS [CSS ...]] [-no-css] [-no-js] [-bare]
-|                [-section SECTION] [-dbg]
-|                [src_path] [dst_path]
-|
-| Converts .wu files to html.
-|
-| positional arguments:
-|   src_path            Input .wu source path; defaults to <stdin>.
-|   dst_path            Output path: defaults to <stdout>.
-|
-| optional arguments:
-|   -h, --help          show this help message and exit
-|   -deps               Print external file dependencies of the input, one per
-|                       line. Does not output HTML.
-|   -css CSS [CSS ...]  paths to CSS.
-|   -no-css             Omit default CSS.
-|   -no-js              Omit default Javascript.
-|   -bare               Omit the top-level HTML document structure.
-|   -section SECTION    Emit only the specified section.
-|   -dbg                print debug info.
+<embed: writeup-help.txt>
 
 
 # Format
@@ -59,10 +41,10 @@ Writeup documents consist of:
   * `Dedicated to the public domain`
 * Blank lines, containing only whitespace characters.
 * Header lines, beginning with one or more `#` (hash) characters.
-* List lines, beginning with zero or more pairs of spaces, followed by a `-` (dash) character.
-* Code lines, prefixed with a `|` (pipe / vertical bar) character.
-* Quote lines, prefixed with `>` (greater than) character.
-* Text lines, which are any lines that don't match the above criteria.
+* List lines, beginning with zero or more pairs of spaces, followed by a `*` (dash) character.
+* Code lines, prefixed with a `|` (pipe / vertical-bar) character.
+* Quote lines, prefixed with a `>` (greater-than) character.
+* Text lines, which are any lines that don't match any of the above criteria.
 
 These are translated as follows:
 * Line breaks are inserted between text lines.
@@ -74,7 +56,7 @@ These are translated as follows:
 
 There is also support for inline markup:
 * Inline code is quoted with backticks like so: `\`…\``
-  * Literal backticks and backslashes within an inline code span are written by escaping with a backslash: `\\\`` and `\\\\`
+  * Literal backticks and backslashes within an inline code span are written by escaping with a backslash: `\\\`` and `\\\\`.
 * A generic span syntax also exists: `<tag: …>`, where the tag can be one of the following:
   * `b`: bold text: `<b: bold text>` → <b: bold text>.
   * `embed`: embed content from an external file.
@@ -82,13 +64,14 @@ There is also support for inline markup:
     * If the link is followed by a space and additional words of text, then the text becomes the visible link text.
     * Example: `<https://github.com/gwk/writeup>` → <https://github.com/gwk/writeup>
     * Example: `<https://github.com/gwk/writeup writeup>` → <https://github.com/gwk/writeup writeup>
-    * if the tag is `link`, then the link is a relative link and is also emitted as a dependency path.
+    * if the tag is `link`, then the link is a relative link and is treated by Muck as a project dependency.
   * `span`: a generic HTML span with arbitrary options (syntax is a work in progress).
 * More inline markup features need to be added!
   * italics, strikethrough, edit additions and deletions, etc.
 
 ## Comparison to Markdown
-Writeup differs from Github Flavored Markdown (GFD) substantially; here are some of the more obvious points:
+
+Writeup differs from Github Flavored Markdown (GFD) substantially. Here are some of the more obvious points:
 * Writeup headers create a hierarchical structure of `<section>` blocks in the document; Markdown has a flat structure.
 * By default the output HTML contains CSS, Javascript, and class attributes in order to stand alone; the Github markup system purposefully strips such content out of documents.
 * Writeup does not support:
@@ -102,18 +85,20 @@ Writeup differs from Github Flavored Markdown (GFD) substantially; here are some
   * Syntax highlighting.
   * Ordered lists.
 
+## A note about GitHub Readme files
+GitHub supports several markup formats for project readmes, via <https://github.com/github/markup>; Writeup is not yet one of them. However
 
 # Versioning
 
-All writeup documents require a version line at the beginning of the document, like this:
+All Writeup documents require a version line at the beginning of the document, like this:
 | writeup v0
 
 Writeup is currently experimental, and the only version number supported is 0. Once the format is reasonably stable, then it will be promoted to v1. From then on, if the format changes, implementations should either recognize and respect or else reject older documents.
 
-Text snippets submitted to a program using Writeup as a library can omit the version number; it is the responsibility of the program to track the format version as necessary.
+Text snippets submitted to a program using Writeup as a library can omit the version number; it is then the responsibility of the program to track the format version as necessary.
 
 ## Adoption
-If you start using writeup seriously please let me know and I will bump the version number to 1.
+If you start using Writeup seriously please let me know and I will bump the version number to 1.
 
 ## Paging
 Writeup HTML contains Javascript that facilitates paging across primary and secondary sections using the left and right arrow keys.
@@ -157,5 +142,3 @@ Becomes:
 # Credits
 
 By George King.
-
-Shout out to the RZA, the GZA, Method Man, Raekwon, Ghostface Killah, Inspectah Deck, U-God, Masta Killa, Cappadonna, and the Ol' Dirty Bastard.
