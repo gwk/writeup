@@ -9,5 +9,4 @@ __pycache__/
 
 # Project.
 _build/
-_misc/
-todo.txt
+_repro.wu
