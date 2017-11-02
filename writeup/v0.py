@@ -10,10 +10,12 @@ from argparse import ArgumentParser
 from html import escape as html_escape
 from os.path import dirname as path_dir, exists as path_exists, join as path_join, basename as path_name, relpath as rel_path, splitext as split_ext
 from sys import stdin, stdout, stderr
-from typing import re as Re, Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Union, TextIO, Tuple
-
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Match, NoReturn, Optional, Sequence, Union, TextIO, Tuple, cast
 
 __all__ = ['main', 'writeup', 'writeup_dependencies']
+
+
+SrcLine = Tuple[int, str]
 
 
 def main() -> None:
@@ -48,8 +50,8 @@ def main() -> None:
   if args.deps:
     dependencies = writeup_dependencies(
       src_path=src_path,
-      src_lines=f_in,
-      dbg=args.dbg,
+      text_lines=f_in,
+      emit_dbg=args.dbg,
     )
     for dep in dependencies:
       print(dep, file=f_out)
@@ -66,7 +68,7 @@ def main() -> None:
   else:
     html_lines_gen = writeup(
       src_path=src_path,
-      src_lines=f_in,
+      src_lines=enumerate(f_in),
       title=split_ext(path_name(src_path))[0],
       description='', # TODO.
       author='', # TODO.
@@ -74,21 +76,18 @@ def main() -> None:
       js=(None if args.bare or args.no_js else minify_js(default_js)),
       emit_doc=(not args.bare),
       target_section=args.section,
-      dbg=args.dbg,
+      emit_dbg=args.dbg,
     )
     for line in html_lines_gen:
       print(line, file=f_out)
 
 
-def writeup(src_path: str, src_lines: Iterable[str], title: str, description: str, author: str,
-  css: Optional[str], js: Optional[str], emit_doc: bool, target_section: Optional[str], dbg: bool) -> Iterable[str]:
+def writeup(src_path: str, src_lines: Iterable[SrcLine], title: str, description: str, author: str,
+  css: Optional[str], js: Optional[str], emit_doc: bool, target_section: Optional[str], emit_dbg: bool) -> Iterable[str]:
   'generate a complete html document from a writeup file (or stream of lines).'
 
-  ctx = Ctx(
-    src_path=src_path,
-    src_lines=src_lines,
-    should_embed=True,
-    dbg=dbg)
+  ctx = Ctx(src_path=src_path, should_embed=True, emit_dbg=emit_dbg)
+  parse(ctx=ctx, src_lines=src_lines)
 
   if emit_doc:
     yield from [
@@ -126,16 +125,13 @@ def writeup(src_path: str, src_lines: Iterable[str], title: str, description: st
     yield '</body>\n</html>'
 
 
-def writeup_dependencies(src_path: str, src_lines: Iterable[str], dir_names: Optional[List[Any]]=None, dbg=False) -> List[str]:
+def writeup_dependencies(src_path: str, text_lines: Iterable[str], dir_names: Optional[List[Any]]=None, emit_dbg=False) -> List[str]:
   '''
   Return a list of dependencies from the writeup in `src_lines`.
   `dir_names` is an ignored argument passed by the external `muck` tool.
   '''
-  ctx = Ctx(
-    src_path=src_path,
-    src_lines=src_lines,
-    should_embed=False,
-    dbg=dbg)
+  ctx = Ctx(src_path=src_path, should_embed=False, emit_dbg=emit_dbg)
+  parse(ctx=ctx, src_lines=enumerate(text_lines))
   return sorted(ctx.dependencies)
 
 
@@ -144,13 +140,13 @@ class Ctx: ...
 
 class Span:
   'A tree node of inline HTML content.'
-  def __init__(self, text: str):
+  def __init__(self, text: str) -> None:
     self.text = text
 
   def html(self, depth: int) -> str:
     return html_esc(self.text)
 
-  def __repr__(self):
+  def __repr__(self) -> str:
     return f'{self.__class__.__name__}({self.text!r})'
 
 Spans = Tuple[Span, ...]
@@ -167,7 +163,7 @@ class CodeSpan(Span):
 
 
 class AttrSpan(Span):
-  def __init__(self, text: str, attrs: Dict[str, str]):
+  def __init__(self, text: str, attrs: Dict[str, str]) -> None:
     super().__init__(text=text)
     self.attrs = attrs
 
@@ -178,7 +174,7 @@ class BoldSpan(AttrSpan):
 
 
 class EmbedSpan(AttrSpan):
-  def __init__(self, text: str, attrs: Dict[str, str], path: str, contents: List[str]):
+  def __init__(self, text: str, attrs: Dict[str, str], path: str, contents: Tuple[str, ...]) -> None:
     super().__init__(text=text, attrs=attrs)
     self.path = path
     self.contents = contents
@@ -195,7 +191,7 @@ class EmbedSpan(AttrSpan):
 
 
 class GenericSpan(AttrSpan):
-  def __init__(self, text: str, attrs: Dict[str, str]):
+  def __init__(self, text: str, attrs: Dict[str, str]) -> None:
     super().__init__(text=text, attrs=attrs)
 
   def html(self, depth: int) -> str:
@@ -204,11 +200,11 @@ class GenericSpan(AttrSpan):
 
 
 class LinkSpan(AttrSpan):
-  def __init__(self, text: str, attrs: Dict[str, str], tag: str, words: [str]):
+  def __init__(self, text: str, attrs: Dict[str, str], tag: str, words: List[str], ctx: Ctx, src: SrcLine) -> None:
     super().__init__(text=text, attrs=attrs)
     self.tag = tag
     if not words:
-      ctx.error(f'link is empty: {self.tag!r}')
+      ctx.error(src, f'link is empty: {self.tag!r}')
     if tag == 'link':
       self.link = words[0]
     else:
@@ -224,22 +220,22 @@ class LinkSpan(AttrSpan):
 
 class Block:
   'A tree node of block-level HTML content.'
-  def finish(self, ctx): pass
+  def finish(self, ctx: Ctx) -> None: pass
   def html(self, ctx: Ctx, depth: int) -> Iterable[str]: raise NotImplementedError
 
 
 class Section(Block):
-  def __init__(self, section_depth: int, quote_depth: int, index_path: Tuple[int, ...], title: Spans):
+  def __init__(self, section_depth: int, quote_depth: int, index_path: Tuple[int, ...], title: Spans) -> None:
     self.section_depth = section_depth
     self.quote_depth = quote_depth
     self.index_path = index_path
     self.title = title
     self.blocks: List[Block] = []
 
-  def __repr__(self): return f'Section({self.sid}, {self.title}, {len(self.blocks)} blocks)'
+  def __repr__(self) -> str: return f'Section({self.sid}, {self.title}, {len(self.blocks)} blocks)'
 
   @property
-  def sid(self): return '.'.join(str(i) for i in self.index_path)
+  def sid(self) -> str: return '.'.join(str(i) for i in self.index_path)
 
   def html(self, ctx: Ctx, depth: int) -> Iterable[str]:
     sid = self.sid
@@ -255,12 +251,12 @@ class Section(Block):
 
 
 class UList(Block):
-  def __init__(self, list_level: int):
+  def __init__(self, list_level: int) -> None:
     super().__init__()
     self.list_level = list_level # 1-indexed (top-level list is 1; no lists is 0).
     self.items: List[ListItem] = []
 
-  def __repr__(self): return f'UList({self.list_level}, {len(self.items)} items)'
+  def __repr__(self) -> str: return f'UList({self.list_level}, {len(self.items)} items)'
 
   def html(self, ctx: Ctx, depth: int) -> Iterable[str]:
     yield indent(depth, f'<ul class="L{self.list_level}">')
@@ -270,11 +266,11 @@ class UList(Block):
 
 
 class ListItem(Block):
-  def __init__(self, list_level: int):
+  def __init__(self, list_level: int) -> None:
     self.list_level = list_level # 1-indexed (top-level list is 1; no lists is 0).
     self.blocks: List[Block] = []
 
-  def __repr__(self): return f'ListItem({self.list_level}, {len(self.blocks)} blocks)'
+  def __repr__(self) -> str: return f'ListItem({self.list_level}, {len(self.blocks)} blocks)'
 
   def html(self, ctx: Ctx, depth: int) -> Iterable[str]:
     if len(self.blocks) == 1 and isinstance(self.blocks[0], Text):
@@ -297,31 +293,30 @@ BranchBlock = Union[Section, UList, ListItem]
 
 
 class LeafBlock(Block):
-  def __init__(self):
-    self.text_lines: List[str] = []
+  def __init__(self) -> None:
+    self.src_lines: List[SrcLine] = []
+    self.content_lines: List[str] = []
 
-  def __repr__(self):
-    head = f'{self.text_lines[0][0:64]!r}… {len(self.text_lines)} lines' if self.text_lines else ''
+  def __repr__(self) -> str:
+    head = f'{self.src_lines[0][1][0:64]!r}… {len(self.src_lines)} lines' if self.src_lines else ''
     return f'{type(self).__name__}({head})'
 
 
 class Quote(LeafBlock):
-  def __init__(self):
+  def __init__(self) -> None:
     super().__init__()
-    self.quote_line_offset = -1
     self.blocks: List[Block] = []
 
-  def finish(self, ctx: Ctx):
-    assert self.quote_line_offset >= 0
+  def finish(self, ctx: Ctx) -> None:
     quote_ctx = Ctx(
       src_path=ctx.src_path,
-      src_lines=self.text_lines,
       quote_depth=ctx.quote_depth + 1,
-      line_offset=self.quote_line_offset,
       is_versioned=False,
       warn_missing_final_newline=False,
       should_embed=ctx.should_embed,
-      dbg=ctx.dbg)
+      emit_dbg=ctx.emit_dbg)
+    unquoted_src_lines = list(enumerate(self.content_lines, self.src_lines[0][0]))
+    parse(ctx=quote_ctx, src_lines=unquoted_src_lines)
     self.blocks = quote_ctx.blocks
 
   def html(self, ctx: Ctx, depth: int) -> Iterable[str]:
@@ -335,19 +330,19 @@ class Code(LeafBlock):
 
   def html(self, ctx: Ctx, depth: int) -> Iterable[str]:
     yield '<div class="code-block">'
-    for line in self.text_lines:
+    for line in self.content_lines:
       content = html_esc(line)
       yield f'<code class="line">{content}</code>'
     yield '</div>'
 
 
 class Text(LeafBlock):
-  def __init__(self):
+  def __init__(self) -> None:
     super().__init__()
     self.lines: List[Spans] = []
 
-  def finish(self, ctx: Ctx):
-    self.lines = [parse_spans(ctx, text=line) for line in self.text_lines]
+  def finish(self, ctx: Ctx) -> None:
+    self.lines = [parse_spans(ctx, src=src, text=text) for (src, text) in zip(self.src_lines, self.content_lines)]
 
   def html(self, ctx: Ctx, depth: int) -> Iterable[str]:
     yield indent(depth, '<p>')
@@ -358,22 +353,21 @@ class Text(LeafBlock):
 
 
 
-class Ctx:
+class Ctx: # type: ignore
   '''
   Parser context.
   Converts input writeup source text to output html lines and dependencies.
   '''
 
-  def __init__(self, src_path: str, src_lines: Iterable[str], should_embed: bool,
-   is_versioned=True, warn_missing_final_newline=True, quote_depth=0, line_offset=0, dbg=False) -> None:
+  def __init__(self, src_path: str, should_embed: bool, is_versioned=True,
+   warn_missing_final_newline=True, quote_depth=0, line_offset=0, emit_dbg=False) -> None:
     self.src_path = src_path
-    self.src_lines = src_lines
     self.should_embed = should_embed
     self.is_versioned = is_versioned
     self.warn_missing_final_newline = warn_missing_final_newline
     self.quote_depth = quote_depth
     self.line_offset = line_offset
-    self.dbg = dbg
+    self.emit_dbg = emit_dbg
 
     self.search_dir = path_dir(src_path) or '.'
     self.license_lines: List[str] = []
@@ -382,11 +376,6 @@ class Ctx:
     self.dependencies: List[str] = []
     self.section_ids: List[str] = [] # accumulated list of all section ids.
     self.paging_ids: List[str] = [] # accumulated list of all paging (level 1 & 2) section ids.
-
-    self.line = '' # updated per line.
-    self.line_num = 0 # updated per line.
-
-    parse(self)
 
 
   @property
@@ -404,16 +393,16 @@ class Ctx:
   def top(self) -> Block:
     return self.stack[-1]
 
-  def push(self, block: Block):
-    self.dbgSL('PUSH', self.line_num, self.stack, block)
+  def push(self, block: Block) -> None:
     if self.stack:
-      self.top.blocks.append(block)
+      section = self.top
+      assert isinstance(section, (Section, ListItem))
+      section.blocks.append(block)
     else:
       self.blocks.append(block)
     self.stack.append(block)
 
   def pop(self) -> Block:
-    self.dbgSL('POP', self.line_num, self.stack)
     popped = self.stack.pop()
     popped.finish(self)
     return popped
@@ -422,11 +411,11 @@ class Ctx:
     prev_index = 0
     while self.depth > section_depth:
       prev = self.pop()
+      assert isinstance(prev, Section)
       prev_index = prev.index_path[section_depth]
     return prev_index
 
-  def pop_to_list(self, list_level: int):
-    self.dbgSL('POP TO LIST', list_level)
+  def pop_to_list(self, list_level: int) -> None:
     while self.stack:
       top = self.top
       if isinstance(top, Section): return
@@ -434,8 +423,8 @@ class Ctx:
       if isinstance(top, ListItem) and top.list_level < list_level: return
       self.pop()
 
-  def append_to_leaf_block(self, list_level, block_type, line):
-    self.dbgSL("APPEND", list_level, block_type.__name__, line)
+  def append_to_leaf_block(self, src: SrcLine, list_level: int, block_type: type, content: str) -> None:
+    self.dbg(src, "APPEND", list_level, block_type.__name__)
     while self.stack:
       top = self.top
       if isinstance(top, Section): break
@@ -447,15 +436,17 @@ class Ctx:
     else:
       leaf = block_type()
       self.push(leaf)
-    leaf.text_lines.append(line)
-    self.dbgSL('-', self.stack)
+    assert isinstance(leaf, LeafBlock)
+    leaf.src_lines.append(src)
+    leaf.content_lines.append(content)
+    self.dbg(src, '-', self.stack)
 
-  def close_leaf_block(self):
+  def close_leaf_block(self) -> None:
     if self.stack and isinstance(self.top, LeafBlock):
       self.pop()
       assert not self.stack or isinstance(self.top, (Section, ListItem))
 
-  def emit_html(self, depth: int, target_section: Optional[str]=None):
+  def emit_html(self, depth: int, target_section: Optional[str]=None) -> Iterator[str]:
     for block in self.blocks:
       if target_section:
         if not isinstance(block, Section) or text_for_spans(block.title) != target_section: continue
@@ -464,17 +455,21 @@ class Ctx:
   def add_dependency(self, dependency: str) -> None:
     self.dependencies.append(dependency)
 
-  def warn(self, *items):
-    errSL(f'{self.src_path}:{self.line_num+1}: warning:', *items)
-    errSL(f'  {self.line!r}')
+  def msg(self, src: SrcLine, label: str, items: Tuple[Any, ...], col: Optional[int]) -> None:
+    line, txt = src
+    col = col or 1
+    errSL(f'{self.src_path}:{line+1}:{col+1}: {label}:', *items)
+    errSL(txt.rstrip('\n'))
 
-  def error(self, *items):
-    errSL(f'{self.src_path}:{self.line_num+1}: error:', *items)
-    errSL(f'  {self.line!r}')
+  def warn(self, src: SrcLine, *items: Any, col:int=None) -> None:
+    self.msg(src, 'warning', items, col)
+
+  def error(self, src: SrcLine, *items: Any, col:int=None) -> NoReturn:
+    self.msg(src, 'error', items, col)
     exit(1)
 
-  def dbgSL(self, *items):
-    if self.dbg: errSL(*items)
+  def dbg(self, src: SrcLine, *items: Any, col:int=None) -> None:
+    if self.emit_dbg: self.msg(src, 'debug', items, col)
 
 
 version_re = re.compile(r'writeup v(\d+)\n')
@@ -495,10 +490,10 @@ line_re = re.compile(r'''(?x:
 (?P<indents> \s* )
 ( (?P<list_star> \* ) (?P<list_spaces> \s* ) )?
 (?:
-  >  \s? (?P<quote> .* )
-| \| \s? (?P<code> .* )
-| (?P<text> [^\s] .* )
-| # blank.
+    >  \s? (?P<quote> .* )
+  | \| \s? (?P<code> .* )
+  | (?P<blank> \s*)
+  | (?P<text> .* )
 )
 )''')
 
@@ -507,37 +502,37 @@ line_groups_to_states = {
   'quote' : s_quote,
   'code': s_code,
   'text': s_text,
-} # defaults to s_blank.
+  'blank': s_blank,
+}
 
 
-def parse(ctx: Ctx):
-  iter_src_lines = iter(ctx.src_lines)
+def parse(ctx: Ctx, src_lines: Iterable[SrcLine]) -> None:
+  iter_src_lines = iter(src_lines)
 
   # Handle version line.
   if ctx.is_versioned:
     try:
-      version_line = next(iter_src_lines)
+      src = next(iter_src_lines)
+      line_idx, version_line = src
     except StopIteration:
       version_line = ''
     m = version_re.fullmatch(version_line)
-    if not m:
-      exit(f'{ctx.src_path}:1:1: error: first line must specify writeup version matching pattern: {version_re.pattern!r}\n'
+    if m is None:
+      ctx.error(src, f'first line must specify writeup version matching pattern: {version_re.pattern!r}\n'
         '  (The only currently supported version number is 0.)')
     version = int(m.group(1))
     if version != 0:
-      exit(f'{ctx.src_path}:1:10: error: unsupported version number: {version}\n'
+      ctx.error(src, f'unsupported version number: {version}\n'
         '  (The only currently supported version number is 0.)')
     ctx.line_offset += 1
 
   # Iterate over lines.
   prev_state = s_start
-  ctx.line_num = ctx.line_offset
-  for line_num, raw_line in enumerate(iter_src_lines, ctx.line_offset):
+  for src in iter_src_lines:
+    line_idx, raw_line = src
     line = raw_line.rstrip('\n')
-    ctx.line = line
-    ctx.line_num = line_num
     if ctx.warn_missing_final_newline and not raw_line.endswith('\n'):
-      ctx.warn('missing final newline.')
+      ctx.warn(src, 'missing final newline.')
 
     # any license notice at top gets moved to a footer at the bottom of the html.
     if prev_state == s_start and license_re.fullmatch(line):
@@ -551,10 +546,11 @@ def parse(ctx: Ctx):
 
     # normal line.
     m = line_re.fullmatch(line)
+    if m is None: ctx.error(src, 'invalid line (unknown reason; please report)')
     #errSL('L', repr(line))
     #errSL('M', m)
-    state = line_groups_to_states.get(m.lastgroup, s_blank)
-    writeup_line(ctx=ctx, state=state, m=m)
+    state = line_groups_to_states[m.lastgroup]
+    writeup_line(ctx=ctx, src=src, state=state, m=m)
     prev_state = state
 
   # Finish.
@@ -562,40 +558,43 @@ def parse(ctx: Ctx):
     ctx.pop()
 
 
-def writeup_line(ctx: Ctx, state: int, m: Re.Match) -> None:
-  'Inner function to process a line.'
+def writeup_line(ctx: Ctx, src: SrcLine, state: int, m: Match) -> None:
+  'Process a source line.'
 
-  ctx.dbgSL(f'DBG {ctx.line_num:03} {state_letters[state]}: {ctx.line}')
+  ctx.dbg(src, state_letters[state])
 
   if state == s_section:
     ctx.pop_to_list(0)
-    if m['section_indents']: ctx.error(f'section header cannot be indented.')
-    check_whitespace(ctx, 1, m['section_spaces'], 'following `#`')
+    if m['section_indents']: ctx.error(src, f'section header cannot be indented.')
+    check_whitespace(ctx, src, len_exp=1, m=m, key='section_spaces', msg_suffix='following `#`')
     section_depth = len(m['section_hashes'])
+    index_path: Tuple[int, ...]
     if not ctx.stack: # first/intro case only.
       index_path = (0,) # intro section is indexed 0; everything else is 1-indexed.
     elif section_depth > ctx.depth + 1:
-        ctx.error(f'missing parent section of depth {ctx.depth + 1}')
+        ctx.error(src, f'missing parent section of depth {ctx.depth + 1}')
     else: # normal case.
       prev_index = ctx.pop_to_section_depth(section_depth - 1)
-      parent_path = ctx.top.index_path if ctx.stack else ()
-      index_path = parent_path + (prev_index+1,)
-    title = parse_spans(ctx, text=m['section_title'])
+      if ctx.stack:
+        index_path = cast(Section, ctx.top).index_path + (prev_index+1,)
+      else:
+        index_path = (prev_index+1,)
+    title = parse_spans(ctx, src=src, text=m['section_title'])
     section = Section(section_depth=section_depth, quote_depth=ctx.quote_depth, index_path=index_path, title=title)
     ctx.push(section)
     return
 
+  check_whitespace(ctx, src, len_exp=None, m=m, key='indents', msg_suffix=' in indentation')
   indents = m['indents']
-  check_whitespace(ctx, -1, indents, ' in indent')
   l = len(indents)
-  if l % 2: ctx.error(f'odd indentation length: {l}.')
+  if l % 2: ctx.error(src, f'odd indentation length: {l}.')
   list_level = l // 2
   if ctx.list_level < list_level:
     errSL(ctx.stack)
-    ctx.error(f'indent implies missing parent list at indent depth {ctx.list_level+1}.')
+    ctx.error(src, f'indent implies missing parent list at indent depth {ctx.list_level+1}.')
 
   if m['list_star']:
-    check_whitespace(ctx, 1, m['list_spaces'], ' following `*`')
+    check_whitespace(ctx, src, len_exp=1, m=m, key='list_spaces', msg_suffix=' following `*`')
     goal_level = list_level + 1
     ctx.pop_to_list(goal_level)
     if ctx.list_level < goal_level:
@@ -603,7 +602,7 @@ def writeup_line(ctx: Ctx, state: int, m: Re.Match) -> None:
       ulist = UList(list_level=goal_level)
       ctx.push(ulist)
     else:
-      ulist = ctx.top
+      ulist = cast(UList, ctx.top)
       assert isinstance(ulist, UList)
     item = ListItem(list_level=goal_level)
     ulist.items.append(item)
@@ -611,39 +610,40 @@ def writeup_line(ctx: Ctx, state: int, m: Re.Match) -> None:
     list_level = goal_level
 
   if state == s_code:
-    ctx.append_to_leaf_block(list_level, Code, m['code'])
+    ctx.append_to_leaf_block(src, list_level, Code, content=m['code'])
 
   elif state == s_quote:
-    ctx.append_to_leaf_block(list_level, Quote, m['quote'])
-    if len(ctx.top.text_lines) == 1: # this is the first line.
-      ctx.stack[-1].quote_line_offset = ctx.line_num
+    ctx.append_to_leaf_block(src, list_level, Quote, content=m['quote'])
 
   elif state == s_text:
-    ctx.append_to_leaf_block(list_level, Text, m['text'])
+    ctx.append_to_leaf_block(src, list_level, Text, content=m['text'])
 
   elif state == s_blank:
-    if len(indents): ctx.warn('blank line is not empty.')
+    if len(indents): ctx.warn(src, 'blank line is not empty.')
     ctx.close_leaf_block()
 
-  else: ctx.error(f'bad state: {state}')
+  else: ctx.error(src, f'bad state: {state}')
 
 
-def check_whitespace(ctx, len_exp, string, msg_suffix=''):
+def check_whitespace(ctx: Ctx, src: SrcLine, len_exp: Optional[int], m: Match, key: str, msg_suffix='') -> bool:
+  col = m.start(key)
+  string = m[key]
+  i = 0
   for i, c in enumerate(string):
     if c != ' ':
-      ctx.warn(f'invalid whitespace character at position {i+1}{msg_suffix}: {c!r}')
+      ctx.warn(src, f'invalid whitespace character{msg_suffix}: {c!r}', col=col+i+1)
       return False
-  if len_exp >= 0 and len(string) != len_exp:
+  if len_exp is not None and len(string) != len_exp:
     s = '' if len_exp == 1 else 's'
-    ctx.warn(f'expected exactly {len_exp} space{s}{msg_suffix}; found: {len(string)}')
+    ctx.warn(src, f'expected exactly {len_exp} space{s}{msg_suffix}; found: {len(string)}', col=col+i+1)
     return False
   return True
 
 
-def parse_spans(ctx: Ctx, text: str) -> Spans:
-  spans = []
+def parse_spans(ctx: Ctx, src: SrcLine, text: str) -> Spans:
+  spans: List[Span] = []
   prev_idx = 0
-  def flush(curr_idx):
+  def flush(curr_idx: int) -> None:
     if prev_idx < curr_idx:
       spans.append(Span(text=text[prev_idx:curr_idx]))
   for m in span_re.finditer(text):
@@ -653,15 +653,19 @@ def parse_spans(ctx: Ctx, text: str) -> Spans:
     i = m.lastindex or 0
     span_fn = span_fns[i]
     group_text = m.group(i)
-    spans.append(span_fn(ctx, group_text))
+    spans.append(span_fn(ctx, src, group_text))
   flush(len(text))
   return tuple(spans)
 
 
-def span_angle_conv(ctx: Ctx, text: str) -> Span:
+def span_dummy_conv(ctx: Ctx, src: SrcLine, text: str) -> Span:
+  raise Exception('unreachable')
+
+
+def span_angle_conv(ctx: Ctx, src: SrcLine, text: str) -> Span:
   'convert angle bracket span to html.'
   tag, colon, post_tag_text = text.partition(':')
-  if colon is None: ctx.error(f'malformed span is missing colon after tag: {text!r}')
+  if colon is None: ctx.error(src, f'malformed span is missing colon after tag: {text!r}')
 
   attrs_list = []
   body_words = []
@@ -680,34 +684,34 @@ def span_angle_conv(ctx: Ctx, text: str) -> Span:
     if val.endswith(';'):
       in_body = True
       val = val[:-1]
-    if not sym_re.fullmatch(key): ctx.error(f'span attribute name is invalid: {word!r}')
-    if not val: ctx.error(f'span attribute value is empty; word: {word!r}')
+    if not sym_re.fullmatch(key): ctx.error(src, f'span attribute name is invalid: {word!r}')
+    if not val: ctx.error(src, f'span attribute value is empty; word: {word!r}')
     if val[0] in ('"', "'") and (len(val) < 2 or val[0] != val[-1]):
-      ctx.error('span attribute value has mismatched quotes (possibly due to writeup doing naive splitting on whitespace);' \
+      ctx.error(src, 'span attribute value has mismatched quotes (possibly due to writeup doing naive splitting on whitespace);' \
         f'word: {word!r}; val: {val!r}')
     attrs_list.append((key, val))
-  if not body_words: ctx.error(f'span has no body (missing colon after the tag?)')
+  if not body_words: ctx.error(src, f'span has no body (missing colon after the tag?)')
   body_text = ' '.join(body_words)
 
   attrs = dict(attrs_list)
   if tag == 'b':
     return BoldSpan(text=body_text, attrs=attrs)
   if tag == 'embed':
-    return embed(ctx, text=body_text, attrs=attrs)
+    return embed(ctx, src, text=body_text, attrs=attrs)
   if tag in span_link_tags:
-    span = LinkSpan(text=body_text, attrs=attrs, tag=tag, words=body_words)
+    span = LinkSpan(text=body_text, attrs=attrs, tag=tag, words=body_words, ctx=ctx, src=src)
     if tag == 'link':
       ctx.add_dependency(span.link)
-    return span
+    return span # type: ignore
   if tag == 'span':
     return GenericSpan(text=body_text, attrs=attrs)
-  ctx.error(f'span has invalid tag: {tag!r}')
+  ctx.error(src, f'span has invalid tag: {tag!r}')
 
 
 span_link_tags = { 'http', 'https', 'link', 'mailto' }
 
 
-def span_code_conv(ctx: Ctx, text: str) -> Span:
+def span_code_conv(ctx: Ctx, src: SrcLine, text: str) -> Span:
   return CodeSpan(text=text)
 
 
@@ -731,16 +735,15 @@ span_pairs = (
   (span_angle_pat, span_angle_conv),
 )
 
-span_fns = (None,) + tuple(f for _, f in span_pairs) # Match.group() is 1-indexed.
+span_fns = (span_dummy_conv,) + tuple(f for _, f in span_pairs) # Match.group() is 1-indexed.
 
 span_re = re.compile('|'.join(p for p, _ in span_pairs))
-#^ wraps each span sub-pattern in capturing parentheses.
 
 
 # Embed.
 
 
-def embed(ctx: Ctx, text: str, attrs: Dict[str, str]) -> Span:
+def embed(ctx: Ctx, src: SrcLine, text: str, attrs: Dict[str, str]) -> Span:
   'convert an `embed` span into html.'
   path = path_join(ctx.search_dir, text)
   if path.startswith('./'):
@@ -749,16 +752,16 @@ def embed(ctx: Ctx, text: str, attrs: Dict[str, str]) -> Span:
   if ctx.should_embed:
     try: f = open(path)
     except FileNotFoundError:
-      ctx.error(f'embedded file not found: {path!r}')
+      ctx.error(src, f'embedded file not found: {path!r}')
     ext = attrs.get('ext')
     if not ext:
       ext = split_ext(path)[1]
     try: embed_fn = embed_dispatch[ext]
     except KeyError:
-      ctx.error(f'embedded file has unknown extension type: {path!r}')
+      ctx.error(src, f'embedded file has unknown extension type: {path!r}')
     contents = tuple(embed_fn(ctx, f))
   else:
-    contents = []
+    contents = ()
   return EmbedSpan(text=text, attrs=attrs, path=path, contents=contents)
 
 
@@ -773,7 +776,7 @@ def embed_csv(ctx: Ctx, f: TextIO) -> List[str]:
   it = iter(csv_reader)
   lines = ['<table>']
 
-  def append(*els): lines.append(''.join(els))
+  def append(*els:str) -> None: lines.append(''.join(els))
 
   try: header = next(it)
   except StopIteration: pass
@@ -829,11 +832,11 @@ def embed_img(ctx: Ctx, f: TextIO) -> List[str]:
 def embed_wu(ctx: Ctx, f: TextIO) -> List[str]:
   embed_ctx = Ctx(
     src_path=f.name,
-    src_lines=f,
     quote_depth=ctx.quote_depth,
     line_offset=0,
     is_versioned=True,
     should_embed=ctx.should_embed)
+  parse(embed_ctx, src_lines=enumerate(f))
   return list(embed_ctx.emit_html(depth=0))
 
 
@@ -843,9 +846,8 @@ embed_dispatch: Dict[str, Callable[[Ctx, TextIO], Iterable[str]]] = {
   '.wu'   : embed_wu,
 }
 
-def _add_embed(fn, *exts):
+def _add_embed(fn: Callable[[Ctx, TextIO], Iterable[str]], *exts: str) -> None:
   embed_dispatch.update((ext, fn) for ext in exts)
-
 
 _add_embed(embed_code, '.bash', '.js', '.py', '.sh', '.sql', '.swift', '.txt')
 _add_embed(embed_direct, '.svg')
@@ -862,12 +864,12 @@ def attrs_bool(attrs: Dict[str, str], key: str) -> bool:
 
 # HTML output.
 
-def html_esc(text: str):
+def html_esc(text: str) -> str:
   # TODO: check for strange characters that html will ignore.
   return html_escape(text, quote=False)
 
 
-def html_esc_attr(text: str):
+def html_esc_attr(text: str) -> str:
   return html_escape(text, quote=True)
 
 
@@ -885,7 +887,7 @@ def indent(depth: int, *items: str) -> str:
 
 # Error reporting.
 
-def errSL(*items):
+def errSL(*items) -> None:
   print(*items, file=stderr)
 
 
@@ -898,7 +900,7 @@ minify_css_re = re.compile(r'(?s)(?<=: )(.+?;)|\s+|/\*.*?\*/|//[^\n]*\n?')
 # other choice clauses cause group 1 to hold None.
 # we could do more agressive minification but this is good enough for now.
 
-def minify_css(src: str):
+def minify_css(src: str) -> str:
   chunks = []
   for chunk in minify_css_re.split(src):
     if chunk: # discard empty chunks and splits that are None (not captured).
@@ -1075,7 +1077,7 @@ ul {
 
 # Javascript.
 
-def minify_js(js):
+def minify_js(js: str) -> str:
   return js
 
 default_js = '''

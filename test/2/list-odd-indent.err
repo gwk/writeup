@@ -1,2 +1,2 @@
-<stdin>:4: error: odd indentation length: 1.
-  ' * single space indent.'
+<stdin>:4:2: error: odd indentation length: 1.
+ * single space indent.

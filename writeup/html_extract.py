@@ -8,17 +8,20 @@ from html.parser import HTMLParser
 from typing import *
 
 
-def main():
-  parser = ArgumentParser('Extract a portion of an HTML document.')
-  parser.add_argument('-id',help='The `id` of the DOM element to extract.')
-  parser.add_argument('path', nargs='?', help='path to the HTML document (defaults to stdin).')
-  args = parser.parse_args()
+def main() -> None:
+  arg_parser = ArgumentParser('Extract a portion of an HTML document.')
+  arg_parser.add_argument('-id',help='The `id` of the DOM element to extract.')
+  arg_parser.add_argument('path', nargs='?', help='path to the HTML document (defaults to stdin).')
+  args = arg_parser.parse_args()
   path = args.path
 
   try: file = open(path) if path is not None else stdin
   except FileNotFoundError as e: exit(f'file not found: {e.filename}')
   parser = Parser(path=file.name, id=args.id, lines=list(file))
   parser.extract()
+
+
+Pos = Tuple[int, int]
 
 
 class Parser(HTMLParser):
@@ -28,23 +31,23 @@ class Parser(HTMLParser):
     self.path = path
     self.id = id
     self.lines = lines
-    self.stack = []
-    self.extract_start_pos = None
+    self.stack: List[Tuple[Pos, str]] = []
+    self.extract_start_pos: Optional[Pos] = None
 
-  def extract(self):
+  def extract(self) -> None:
     for line in self.lines:
       self.feed(line)
     self.close()
     if self.extract_start_pos: exit('specified element was found but unterminated.')
     else: exit('specified element was not found.')
 
-  def handle_starttag(self, tag, attrs):
+  def handle_starttag(self, tag: str, attrs: List[Tuple[str, str]]):
     self.stack.append((self.pos, tag))
     d = dict(attrs)
     if d.get('id') == self.id:
       self.extract_start_pos = self.pos
 
-  def handle_endtag(self, tag):
+  def handle_endtag(self, tag: str) -> None:
     if self.stack and self.stack[-1][1] == tag:
       p, t = self.stack.pop()
       if p == self.extract_start_pos:
@@ -61,7 +64,7 @@ class Parser(HTMLParser):
         self.msg(f'note: could match here', pos=pi)
         return
 
-  def print_range(self, start_pos, end_pos):
+  def print_range(self, start_pos: Pos, end_pos: Pos) -> None:
     sl, sc = start_pos
     el, ec = end_pos
     if sl == el:
@@ -77,11 +80,11 @@ class Parser(HTMLParser):
     print(last[ec:close_pos+1])
 
   @property
-  def pos(self):
+  def pos(self) -> Pos:
     line1, col0 = self.getpos()
     return (line1-1, col0)
 
-  def msg(self, msg, pos=None):
+  def msg(self, msg: str, pos:Pos=None) -> None:
     if pos is None: pos = self.pos
     print(f'{self.path}:{pos[0]+1}:{pos[1]+1}: {msg}')
 

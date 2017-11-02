@@ -10,10 +10,10 @@ Writeup is a text markup format that translates to HTML5. It is similar to Markd
 * The output HTML document is organized into hierarchical sections.
 * An optional lightweight presentation mode (implemented with embedded JavaScript) makes Writeup useful for simple technical slide decks.
 * A required syntax version at the top of every Writeup document allows the format to evolve while preserving the ability to render older documents exactly as originally intended.
-* Special handling copyright/license header lines.
-* Integration with <https:gwk.github.io/muck Muck>, a build tool for data projects.
+* Special handling of copyright/license header lines.
+* Integration with <https://gwk.github.io/muck Muck>, a build tool for data projects.
 
-The project is hosted at <https:github.com/gwk/writeup>, with documentation at <https:gwk.github.io/writeup>.
+The project is hosted at <https://github.com/gwk/writeup>, with documentation at <https://gwk.github.io/writeup>.
 
 ## License
 
