@@ -1,4 +1,4 @@
 {
-  'cmd': '$PROJ/writeup/__main__.py test/1/html/empty.wu',
+  'cmd': 'writeup test/1/html/empty.wu',
   'links': 'test'
 }

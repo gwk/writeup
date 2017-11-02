@@ -1,5 +1,5 @@
 {
-  'cmd': "$PROJ/writeup/__main__.py",
+  'cmd': "writeup",
   'in': '''\
 writeup v0
 

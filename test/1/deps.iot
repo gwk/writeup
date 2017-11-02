@@ -1,4 +1,4 @@
 {
-  'cmd': '$PROJ/writeup/__main__.py -deps test/1/html/embed.wu',
+  'cmd': 'writeup -deps test/1/html/embed.wu',
   'links': 'test',
 }
