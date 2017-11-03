@@ -7,10 +7,16 @@ assert sys.version_info >= (3, 6, 0)
 import re
 
 from argparse import ArgumentParser
+from collections import defaultdict
 from html import escape as html_escape
 from os.path import dirname as path_dir, exists as path_exists, join as path_join, basename as path_name, relpath as rel_path, splitext as split_ext
 from sys import stdin, stdout, stderr
-from typing import Any, Callable, Dict, Iterable, Iterator, List, Match, NoReturn, Optional, Sequence, Union, TextIO, Tuple, cast
+from typing import Any, Callable, DefaultDict, Dict, Iterable, Iterator, List, Match, NoReturn, Optional, Sequence, Union, TextIO, Tuple, cast
+
+import pygments
+import pygments.lexers
+import pygments.token
+from pygments.token import *
 
 __all__ = ['main', 'writeup', 'writeup_dependencies']
 
@@ -24,7 +30,7 @@ def main() -> None:
   arg_parser.add_argument('dst_path', nargs='?', help='Output path: defaults to <stdout>.')
   arg_parser.add_argument('-deps', action='store_true',
     help='Print external file dependencies of the input, one per line. Does not output HTML.')
-  arg_parser.add_argument('-css', nargs='+', default=(), help='paths to CSS.')
+  arg_parser.add_argument('-css-paths', nargs='+', default=(), help='paths to CSS.')
   arg_parser.add_argument('-no-css', action='store_true', help='Omit default CSS.')
   arg_parser.add_argument('-no-js', action='store_true', help='Omit default Javascript.')
   arg_parser.add_argument('-bare', action='store_true', help='Omit the top-level HTML document structure.')
@@ -58,12 +64,12 @@ def main() -> None:
     exit(0)
 
   css_blocks = [] if (args.bare or args.no_css) else [default_css]
-  for path in args.css:
+  for path in args.css_paths:
     try:
       with open(path) as f:
         css_blocks.append(f.read())
     except FileNotFoundError:
-      exit(f'writeup: css file does not exist: {args.css!r}')
+      exit(f'writeup: css file does not exist: {path!r}')
 
   else:
     html_lines_gen = writeup(
@@ -103,6 +109,7 @@ def writeup(src_path: str, src_lines: Iterable[SrcLine], title: str, description
     if css_lines is not None:
       yield f'  <style type="text/css">'
       yield from css_lines
+      yield from ctx.render_css()
       yield '  </style>'
     if js:
       yield f'  <script type="text/javascript"> "use strict";{js}</script>'
@@ -378,6 +385,7 @@ class Ctx: # type: ignore
     self.dependencies: List[str] = []
     self.section_ids: List[str] = [] # accumulated list of all section ids.
     self.paging_ids: List[str] = [] # accumulated list of all paging (level 1 & 2) section ids.
+    self.css: DefaultDict[str, List[str]] = defaultdict(list)
 
 
   @property
@@ -456,6 +464,15 @@ class Ctx: # type: ignore
 
   def add_dependency(self, dependency: str) -> None:
     self.dependencies.append(dependency)
+
+  def add_css(self, class_, style) -> None:
+    l = self.css[class_] # get list from default dict.
+    if style not in l: l.append(style) # deduplicate but preserve order.
+
+  def render_css(self) -> Iterator[str]:
+    for selector, styles in self.css.items():
+      style_string = ''.join(f'{style};' for style in styles)
+      yield f'{selector}{{{style_string}}}'
 
   def msg(self, src: SrcLine, label: str, items: Tuple[Any, ...], col: Optional[int]) -> None:
     line, txt = src
@@ -758,7 +775,7 @@ def embed(ctx: Ctx, src: SrcLine, text: str, attrs: Dict[str, str]) -> Span:
     ext = attrs.get('ext')
     if not ext:
       ext = split_ext(path)[1]
-    try: embed_fn = embed_dispatch[ext]
+    try: embed_fn = embed_dispatch.get(ext, embed_code)
     except KeyError:
       ctx.error(src, f'embedded file has unknown extension type: {path!r}')
     contents = tuple(embed_fn(ctx, f))
@@ -794,12 +811,20 @@ def embed_csv(ctx: Ctx, f: TextIO) -> List[str]:
 
 
 def embed_code(ctx: Ctx, f: TextIO) -> Iterator[str]:
+  lines = list(f)
+  first = lines[0] if lines else ''
+  lexer = pygments.lexers.guess_lexer_for_filename(f.name, first)
   yield '<div class="code-block">'
-  for line in f:
-    content = html_esc(line)
+  for line in lines:
+    content = ''.join(render_token(ctx, *t) for t in pygments.lex(line, lexer))
     yield f'<code class="line">{content}</code>'
   yield '</div>'
 
+def render_token(ctx: Ctx, kind: pygments.token._TokenType, text: str) -> str:
+  class_, color = token_class_colors.get(kind, ('t', None))
+  if color is None: return text
+  ctx.add_css(f'code.line span.{class_}', style=f'color: {color}')
+  return f'<span class="{class_}">{html_esc(text)}</span>'
 
 def embed_direct(ctx: Ctx, f: TextIO) -> List[str]:
   return list(filter(None, (xml_processing_instruction_re.sub('', line.rstrip()) for line in f)))
@@ -851,7 +876,6 @@ embed_dispatch: Dict[str, Callable[[Ctx, TextIO], Iterable[str]]] = {
 def _add_embed(fn: Callable[[Ctx, TextIO], Iterable[str]], *exts: str) -> None:
   embed_dispatch.update((ext, fn) for ext in exts)
 
-_add_embed(embed_code, '.bash', '.js', '.py', '.sh', '.sql', '.swift', '.txt')
 _add_embed(embed_direct, '.svg')
 _add_embed(embed_html, '.htm', '.html')
 _add_embed(embed_img, '.gif', '.jpeg', '.jpg', '.png')
@@ -896,28 +920,26 @@ def errSL(*items) -> None:
 # CSS.
 
 minify_css_re = re.compile(r'''(?x)
-  (?<=:\s)(.+?;) # preserve spaces in between multiple words followed by semicolon, for cases like `margin: 0 0 0 0;`.
-| (\})        # tokenize closing braces, so that we can emit lines there.
+  ([\{\}])    # tokenize braces, so that we can distinguish selectors from styles, and emit lines on close brace.
 | \n          # discard newlines.
 | \s+         # discard spaces.
 | /\*.*?\*/   # discard comments.
 | //[^\n]*\n? # discard comments.
 ''')
 # We could do more agressive minification but this is good enough for now.
-# Keep multiple lines because it makes diffs containing CSS changes much more readable.
 
 def minify_css(css_blocks: Iterable[str]) -> Iterator[str]:
-  'Given blocks of CSS code, yield minified lines.'
+  'Given blocks of CSS code, yield minified lines without final `\\n`.'
   for block in css_blocks:
     min_chunks = []
     for chunk in minify_css_re.split(block):
       if chunk: # discard empty chunks and splits that are None (not captured).
         min_chunks.append(chunk)
         if chunk == '}' and min_chunks:
-          yield ''.join(min_chunks)
+          yield ' '.join(min_chunks)
           del min_chunks[:]
-    if min_chunks: # shouldn't happen. TODO: error message.
-      yield ''.join(min_chunks)
+    if min_chunks: # shouldn't happen, assuming final token is closing brace.
+      yield ' '.join(min_chunks)
 
 
 default_css = '''
@@ -967,7 +989,7 @@ code.line {
   white-space: pre-wrap;
 }
 div.code-block {
-  background-color: #F0F0F0;
+  background-color: #F8F8F8;
   border-color: #D0D0D0;
   border-radius: 4px;
   border-style: solid;
@@ -1136,6 +1158,94 @@ window.onkeypress = function(e) {
   }
 };
 '''
+
+black   = '#000000'
+blue    = '#0000E0'
+gray    = '#606060'
+magenta = '#800080'
+orange  = '#60400'
+red     = '#800000'
+yellow  = '#806000'
+green   = '#008000'
+
+token_class_colors = {
+  Token.Text                        : ('t',   None),
+  Token.Escape                      : ('esc', yellow),
+  Token.Error                       : ('err', red),
+  Token.Other                       : ('x',   black),
+  Token.Keyword                     : ('k',   magenta),
+  Token.Keyword.Constant            : ('kc',  black),
+  Token.Keyword.Declaration         : ('kd',  black),
+  Token.Keyword.Namespace           : ('kn',  magenta),
+  Token.Keyword.Pseudo              : ('kp',  black),
+  Token.Keyword.Reserved            : ('kr',  black),
+  Token.Keyword.Type                : ('kt',  black),
+  Token.Name                        : ('n',   black),
+  Token.Name.Attribute              : ('na',  black),
+  Token.Name.Builtin                : ('nb',  black),
+  Token.Name.Builtin.Pseudo         : ('bp',  black),
+  Token.Name.Class                  : ('nc',  black),
+  Token.Name.Constant               : ('no',  black),
+  Token.Name.Decorator              : ('nd',  black),
+  Token.Name.Entity                 : ('ni',  black),
+  Token.Name.Exception              : ('ne',  black),
+  Token.Name.Function               : ('nf',  black),
+  Token.Name.Function.Magic         : ('fm',  black),
+  Token.Name.Property               : ('py',  black),
+  Token.Name.Label                  : ('nl',  black),
+  Token.Name.Namespace              : ('nn',  black),
+  Token.Name.Other                  : ('nx',  black),
+  Token.Name.Tag                    : ('nt',  black),
+  Token.Name.Variable               : ('nv',  black),
+  Token.Name.Variable.Class         : ('vc',  black),
+  Token.Name.Variable.Global        : ('vg',  black),
+  Token.Name.Variable.Instance      : ('vi',  black),
+  Token.Name.Variable.Magic         : ('vm',  black),
+  Token.Literal                     : ('l',   black),
+  Token.Literal.Date                : ('ld',  green),
+  Token.Literal.String              : ('s',   green),
+  Token.Literal.String.Affix        : ('sa',  green),
+  Token.Literal.String.Backtick     : ('sb',  green),
+  Token.Literal.String.Char         : ('sc',  green),
+  Token.Literal.String.Delimiter    : ('dl',  green),
+  Token.Literal.String.Doc          : ('sd',  green),
+  Token.Literal.String.Double       : ('s2',  green),
+  Token.Literal.String.Escape       : ('se',  green),
+  Token.Literal.String.Heredoc      : ('sh',  green),
+  Token.Literal.String.Interpol     : ('si',  green),
+  Token.Literal.String.Other        : ('sx',  green),
+  Token.Literal.String.Regex        : ('sr',  green),
+  Token.Literal.String.Single       : ('s1',  green),
+  Token.Literal.String.Symbol       : ('ss',  green),
+  Token.Literal.Number              : ('m',   blue),
+  Token.Literal.Number.Bin          : ('mb',  blue),
+  Token.Literal.Number.Float        : ('mf',  blue),
+  Token.Literal.Number.Hex          : ('mh',  blue),
+  Token.Literal.Number.Integer      : ('mi',  blue),
+  Token.Literal.Number.Integer.Long : ('il',  blue),
+  Token.Literal.Number.Oct          : ('mo',  blue),
+  Token.Operator                    : ('o',   black),
+  Token.Operator.Word               : ('ow',  black),
+  Token.Punctuation                 : ('p',   black),
+  Token.Comment                     : ('c',   gray),
+  Token.Comment.Hashbang            : ('ch',  gray),
+  Token.Comment.Multiline           : ('cm',  gray),
+  Token.Comment.Preproc             : ('cp',  gray),
+  Token.Comment.PreprocFile         : ('cpf', gray),
+  Token.Comment.Single              : ('c1',  gray),
+  Token.Comment.Special             : ('cs',  gray),
+  Token.Generic                     : ('g',   black),
+  Token.Generic.Deleted             : ('gd',  black),
+  Token.Generic.Emph                : ('ge',  black),
+  Token.Generic.Error               : ('gr',  black),
+  Token.Generic.Heading             : ('gh',  black),
+  Token.Generic.Inserted            : ('gi',  black),
+  Token.Generic.Output              : ('go',  black),
+  Token.Generic.Prompt              : ('gp',  black),
+  Token.Generic.Strong              : ('gs',  black),
+  Token.Generic.Subheading          : ('gu',  black),
+  Token.Generic.Traceback           : ('gt',  orange),
+}
 
 
 if __name__ == '__main__': main()
