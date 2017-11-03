@@ -57,11 +57,11 @@ def main() -> None:
       print(dep, file=f_out)
     exit(0)
 
-  css = [] if (args.bare or args.no_css) else [default_css]
+  css_blocks = [] if (args.bare or args.no_css) else [default_css]
   for path in args.css:
     try:
       with open(path) as f:
-        css.append(f.read())
+        css_blocks.append(f.read())
     except FileNotFoundError:
       exit(f'writeup: css file does not exist: {args.css!r}')
 
@@ -72,7 +72,7 @@ def main() -> None:
       title=split_ext(path_name(src_path))[0],
       description='', # TODO.
       author='', # TODO.
-      css=minify_css('\n'.join(css)),
+      css_lines=minify_css(css_blocks),
       js=(None if args.bare or args.no_js else minify_js(default_js)),
       emit_doc=(not args.bare),
       target_section=args.section,
@@ -83,7 +83,7 @@ def main() -> None:
 
 
 def writeup(src_path: str, src_lines: Iterable[SrcLine], title: str, description: str, author: str,
-  css: Optional[str], js: Optional[str], emit_doc: bool, target_section: Optional[str], emit_dbg: bool) -> Iterable[str]:
+  css_lines: Optional[Iterator[str]], js: Optional[str], emit_doc: bool, target_section: Optional[str], emit_dbg: bool) -> Iterable[str]:
   'generate a complete html document from a writeup file (or stream of lines).'
 
   ctx = Ctx(src_path=src_path, should_embed=True, emit_dbg=emit_dbg)
@@ -100,8 +100,10 @@ def writeup(src_path: str, src_lines: Iterable[SrcLine], title: str, description
       f' <meta name="author" content="{author}" />',
       '  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=" />', # empty icon.
     ]
-    if css:
-      yield f'  <style type="text/css">{css}</style>'
+    if css_lines is not None:
+      yield f'  <style type="text/css">'
+      yield from css_lines
+      yield '  </style>'
     if js:
       yield f'  <script type="text/javascript"> "use strict";{js}</script>'
     yield '</head>'
@@ -893,19 +895,29 @@ def errSL(*items) -> None:
 
 # CSS.
 
-minify_css_re = re.compile(r'(?s)(?<=: )(.+?;)|\s+|/\*.*?\*/|//[^\n]*\n?')
-# need to preserve spaces in between multiple words followed by semicolon,
-# for cases like `margin: 0 0 0 0;`.
-# the first choice clause captures these chunks in group 1;
-# other choice clauses cause group 1 to hold None.
-# we could do more agressive minification but this is good enough for now.
+minify_css_re = re.compile(r'''(?x)
+  (?<=:\s)(.+?;) # preserve spaces in between multiple words followed by semicolon, for cases like `margin: 0 0 0 0;`.
+| (\})        # tokenize closing braces, so that we can emit lines there.
+| \n          # discard newlines.
+| \s+         # discard spaces.
+| /\*.*?\*/   # discard comments.
+| //[^\n]*\n? # discard comments.
+''')
+# We could do more agressive minification but this is good enough for now.
+# Keep multiple lines because it makes diffs containing CSS changes much more readable.
 
-def minify_css(src: str) -> str:
-  chunks = []
-  for chunk in minify_css_re.split(src):
-    if chunk: # discard empty chunks and splits that are None (not captured).
-      chunks.append(chunk)
-  return ' '.join(chunks) # use empty string joiner for more aggressive minification.
+def minify_css(css_blocks: Iterable[str]) -> Iterator[str]:
+  'Given blocks of CSS code, yield minified lines.'
+  for block in css_blocks:
+    min_chunks = []
+    for chunk in minify_css_re.split(block):
+      if chunk: # discard empty chunks and splits that are None (not captured).
+        min_chunks.append(chunk)
+        if chunk == '}' and min_chunks:
+          yield ''.join(min_chunks)
+          del min_chunks[:]
+    if min_chunks: # shouldn't happen. TODO: error message.
+      yield ''.join(min_chunks)
 
 
 default_css = '''
