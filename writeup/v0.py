@@ -134,10 +134,9 @@ def writeup(src_path: str, src_lines: Iterable[SrcLine], title: str, description
     yield '</body>\n</html>'
 
 
-def writeup_dependencies(src_path: str, text_lines: Iterable[str], dir_names: Optional[List[Any]]=None, emit_dbg=False) -> List[str]:
+def writeup_dependencies(src_path: str, text_lines: Iterable[str], emit_dbg=False) -> List[str]:
   '''
   Return a list of dependencies from the writeup in `src_lines`.
-  `dir_names` is an ignored argument passed by the external `muck` tool.
   '''
   ctx = Ctx(src_path=src_path, should_embed=False, emit_dbg=emit_dbg)
   parse(ctx=ctx, src_lines=enumerate(text_lines))
