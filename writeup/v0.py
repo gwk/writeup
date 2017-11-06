@@ -471,6 +471,7 @@ class Ctx: # type: ignore
       yield from block.html(ctx=self, depth=depth)
 
   def add_dependency(self, dependency: str) -> None:
+    assert dependency
     self.dependencies.append(dependency)
 
   def add_css(self, class_, style) -> None:
@@ -699,10 +700,10 @@ def span_angle_conv(ctx: Ctx, src: SrcLine, text: str) -> Span:
   in_body = False
   # TODO: better escaping syntax for equals.
   for i, word in enumerate(post_tag_text.split(' ')):
+    if word == '': continue
     if in_body or (i == 0 and tag in span_link_tags):
       # hack: for URLs; do not partition first word because URL might contain '='.
       body_words.append(word); continue
-    if word == '': continue
     if word == ';': in_body = True; continue
     key, eq, val = word.partition('=')
     if not eq:
