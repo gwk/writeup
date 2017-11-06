@@ -176,6 +176,9 @@ class AttrSpan(Span):
     super().__init__(text=text)
     self.attrs = attrs
 
+  def __repr__(self) -> str:
+    return f'{self.__class__.__name__}({self.text!r}, attrs={self.attrs})'
+
 
 class BoldSpan(AttrSpan):
   def html(self, depth: int) -> str:
@@ -187,6 +190,10 @@ class EmbedSpan(AttrSpan):
     super().__init__(text=text, attrs=attrs)
     self.path = path
     self.contents = contents
+
+  def __repr__(self) -> str:
+    return f'{self.__class__.__name__}({self.text!r}, attrs={self.attrs}, path={self.path!r}, contents={self.contents})'
+
 
   def html(self, depth: int) -> str:
     if attrs_bool(self.attrs, 'titled'):
@@ -200,8 +207,6 @@ class EmbedSpan(AttrSpan):
 
 
 class GenericSpan(AttrSpan):
-  def __init__(self, text: str, attrs: Dict[str, str]) -> None:
-    super().__init__(text=text, attrs=attrs)
 
   def html(self, depth: int) -> str:
     attr_str = ' '.join(f'{html_esc_attr(k)}="{html_esc_attr(v)}"' for k, v in self.attrs.items())
@@ -222,6 +227,9 @@ class LinkSpan(AttrSpan):
       self.visible = self.link
     else:
       self.visible = ' '.join(words[1:])
+
+  def __repr__(self) -> str:
+    return f'{self.__class__.__name__}({self.text!r}, attrs={self.attrs}, tag={self.tag!r}, link={self.link!r}, visible={self.visible!r})'
 
   def html(self, depth: int) -> str:
     return f'<a href="{html_esc_attr(self.link)}">{html_esc(self.visible)}</a>'
