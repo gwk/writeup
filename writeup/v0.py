@@ -118,6 +118,7 @@ def writeup(src_path: str, src_lines: Iterable[SrcLine], title: str, description
     yield '<body id="body">'
 
   yield from ctx.emit_html(depth=0, target_section=target_section)
+  if target_section is not None and not ctx.found_target_section: exit(f'target section not found: {target_section!r}')
 
   if bool(js):
     # Generate tables.
@@ -394,6 +395,7 @@ class Ctx: # type: ignore
     self.section_ids: List[str] = [] # accumulated list of all section ids.
     self.paging_ids: List[str] = [] # accumulated list of all paging (level 1 & 2) section ids.
     self.css: DefaultDict[str, List[str]] = defaultdict(list)
+    self.found_target_section = False
 
 
   @property
@@ -466,8 +468,12 @@ class Ctx: # type: ignore
 
   def emit_html(self, depth: int, target_section: Optional[str]=None) -> Iterator[str]:
     for block in self.blocks:
-      if target_section:
-        if not isinstance(block, Section) or text_for_spans(block.title) != target_section: continue
+      if target_section is not None:
+        if not isinstance(block, Section): continue
+        title = text_for_spans(block.title)
+        # TODO: this only works for top level section ids; fixing it requires a recursive approach.
+        if title != target_section and block.sid != target_section: continue
+        self.found_target_section = True
       yield from block.html(ctx=self, depth=depth)
 
   def add_dependency(self, dependency: str) -> None:
@@ -598,7 +604,7 @@ def writeup_line(ctx: Ctx, src: SrcLine, state: int, m: Match) -> None:
     section_depth = len(m['section_hashes'])
     index_path: Tuple[int, ...]
     if not ctx.stack: # first/intro case only.
-      index_path = (0,) # intro section is indexed 0; everything else is 1-indexed.
+      index_path = (0,) # intro section is 0-indexed (`s0`); everything else is 1-indexed.
     elif section_depth > ctx.depth + 1:
         ctx.error(src, f'missing parent section of depth {ctx.depth + 1}')
     else: # normal case.
