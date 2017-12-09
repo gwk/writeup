@@ -17,9 +17,7 @@ cov:
 	iotest -fail-fast -coverage
 
 docs:
-	muck doc/index.html
-	cp _build/doc/*.html docs
-	html-extract docs/index.html -id s0 > readme.md
+	craft-docs
 
 pip-develop:
 	pip3 install -e .
