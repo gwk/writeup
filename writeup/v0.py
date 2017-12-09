@@ -13,9 +13,10 @@ from os.path import dirname as path_dir, exists as path_exists, join as path_joi
 from sys import stdin, stdout, stderr
 from typing import Any, Callable, DefaultDict, Dict, Iterable, Iterator, List, Match, NoReturn, Optional, Sequence, Union, TextIO, Tuple, cast
 
-import pygments
-import pygments.lexers
-import pygments.token
+import pygments # type: ignore
+import pygments.lexers # type: ignore
+import pygments.token # type: ignore
+from pygments.token import Token
 from pygments.token import *
 
 __all__ = ['main', 'writeup', 'writeup_dependencies']
@@ -729,7 +730,7 @@ def span_angle_conv(ctx: Ctx, src: SrcLine, text: str) -> Span:
     span = LinkSpan(text=body_text, attrs=attrs, tag=tag, words=body_words, ctx=ctx, src=src)
     if tag == 'link':
       ctx.add_dependency(span.link)
-    return span # type: ignore
+    return span
   if tag == 'span':
     return GenericSpan(text=body_text, attrs=attrs)
   ctx.error(src, f'span has invalid tag: {tag!r}')
