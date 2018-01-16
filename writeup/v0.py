@@ -491,7 +491,7 @@ class Ctx: # type: ignore
 
   def msg(self, src: SrcLine, label: str, items: Tuple[Any, ...], col: Optional[int]) -> None:
     line, txt = src
-    col = col or 1
+    if col is None: col = 0
     errSL(f'{self.src_path}:{line+1}:{col+1}: {label}:', *items)
     errSL(txt.rstrip('\n'))
 
@@ -545,11 +545,9 @@ def parse(ctx: Ctx, src_lines: Iterable[SrcLine]) -> None:
 
   # Handle version line.
   if ctx.is_versioned:
-    try:
-      src = next(iter_src_lines)
-      line_idx, version_line = src
-    except StopIteration:
-      version_line = ''
+    try: src = next(iter_src_lines)
+    except StopIteration: src = (0, '')
+    line_idx, version_line = src
     m = version_re.fullmatch(version_line)
     if m is None:
       ctx.error(src, f'first line must specify writeup version matching pattern: {version_re.pattern!r}\n'
@@ -621,7 +619,7 @@ def writeup_line(ctx: Ctx, src: SrcLine, state: int, m: Match) -> None:
   check_whitespace(ctx, src, len_exp=None, m=m, key='indents', msg_suffix=' in indentation')
   indents = m['indents']
   l = len(indents)
-  if l % 2: ctx.error(src, f'odd indentation length: {l}.')
+  if l % 2: ctx.error(src, f'odd indentation length: {l}.', col=l)
   list_level = l // 2
   if ctx.list_level < list_level:
     errSL(ctx.stack)
