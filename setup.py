@@ -1,6 +1,6 @@
 # Dedicated to the public domain under CC0: https://creativecommons.org/publicdomain/zero/1.0/.
 
-# distutils setup script.
+# setuptools setup script.
 # users should install with: `$ pip3 install writeup-tool`
 # developers can make a local install with: `$ pip3 install -e .`
 # upload to pypi test server with: `$ py3 setup.py sdist upload -r pypitest`
