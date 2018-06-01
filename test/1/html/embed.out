@@ -50,5 +50,24 @@
     <p>
       line.
     </p>
+  <br />
+    <p>
+      Relative:
+    <br />
+      <a href="line.wu">line.wu</a>
+    <br />
+      <p>
+    line.
+  </p>
+    </p>
+    <p>
+      Absolute:
+    <br />
+      <a href="/test/assets/line.wu">/test/assets/line.wu</a>
+    <br />
+      <p>
+    line.
+  </p>
+    </p>
   </p>
 </section>

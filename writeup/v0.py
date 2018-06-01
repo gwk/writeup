@@ -9,7 +9,8 @@ import re
 from argparse import ArgumentParser
 from collections import defaultdict
 from html import escape as html_escape
-from os.path import dirname as path_dir, exists as path_exists, join as path_join, basename as path_name, relpath as rel_path, splitext as split_ext
+from os.path import normpath as norm_path, dirname as path_dir, exists as path_exists, join as path_join, \
+basename as path_name, relpath as rel_path, splitext as split_ext
 from sys import stdin, stdout, stderr
 from typing import Any, Callable, DefaultDict, Dict, Iterable, Iterator, List, Match, NoReturn, Optional, Sequence, Union, TextIO, Tuple, cast
 
@@ -387,7 +388,8 @@ class Ctx: # type: ignore
     self.line_offset = line_offset
     self.emit_dbg = emit_dbg
 
-    self.search_dir = path_dir(src_path) or '.'
+    self.project_dir = '.' # For now, assume that writeup is invoked from the project root.
+    self.src_dir = path_dir(src_path) or '.'
     self.license_lines: List[str] = []
     self.stack: List[Block] = [] # stack of currently open content blocks.
     self.blocks: List[Block] = [] # top level blocks.
@@ -476,9 +478,15 @@ class Ctx: # type: ignore
         self.found_target_section = True
       yield from block.html(ctx=self, depth=depth)
 
-  def add_dependency(self, dependency: str) -> None:
+  def add_dependency(self, dependency: str) -> str:
     assert dependency
-    self.dependencies.append(dependency)
+    if dependency.startswith('/'): # Relative to project.
+      path = norm_path(self.project_dir + dependency) # Using path_join would omit everything before the absolute path.
+    else: # Relative to source.
+      path = norm_path(path_join(self.src_dir, dependency))
+    assert path
+    self.dependencies.append(path)
+    return path
 
   def add_css(self, class_, style) -> None:
     l = self.css[class_] # get list from default dict.
@@ -777,10 +785,7 @@ span_re = re.compile('|'.join(p for p, _ in span_pairs))
 
 def embed(ctx: Ctx, src: SrcLine, text: str, attrs: Dict[str, str]) -> Span:
   'convert an `embed` span into html.'
-  path = path_join(ctx.search_dir, text)
-  if path.startswith('./'):
-    path = path[2:]
-  ctx.add_dependency(path)
+  path = ctx.add_dependency(text)
   if ctx.should_embed:
     try: f = open(path)
     except FileNotFoundError:
